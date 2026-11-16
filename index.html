@@ -15,13 +15,18 @@
     <script src="roller.js"></script>
     <script src="scinum.js"></script>
     <script src="statsmaker.js"></script>
+    <script src="config.js"></script>
     <script src="interface.js"></script>
 
     <link rel="stylesheet" href="styles.css">
 
 </head>
 <body>
-<div id="intro">
+<section id="intro">
+    <h2 class="panelHeader">
+        <button type="button" class="panelToggle" aria-expanded="true">Intro</button>
+    </h2>
+    <div class="panelBody">
     <div id="title-area">
         <div id="title-text-box">
             <h1 class="big-line">Dice Statistics Calculator</h1>
@@ -32,6 +37,7 @@
         <div id="title-image-box">
             <img src="images/lotta_dice.jpg" alt="dice group" id="dice-bag">
         </div>
+    </div>
     </div>
     <ul id="starter">
         <li>
@@ -136,123 +142,93 @@
             </div>
         </li>
     </ul>
-</div>
+</section>
 <section id="plots">
+    <h2 class="panelHeader">
+        <button type="button" class="panelToggle" aria-expanded="true">Inputs</button>
+    </h2>
+    <div class="panelBody">
     <div id="tableRequestArea">
         <button id="more">more dice collections</button>
 
 
         <form class="tableRequest" id="table-0">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-1">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-2">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-3">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-4">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-5">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-6">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-7">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-8">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
         <form class="tableRequest" id="table-9">
             <button type="button" class="rmTable">rm dice collection</button>
-            <button type="button" class="roller">roll</button>
-            <div class="tooltip rollDisplay">None
-                <span class='tooltiptext'>previous</span>
-            </div>
             <input type="text" name="tableQuery" title="get table"
                    placeholder="example: 2*Die(6)&3*WeightedDie({1:1, 2:3})">
             <button type="submit">submit</button>
         </form>
 
     </div>
+    </div>
 </section>
-<section class="plotSection">
-
-    <div id="plotter"></div>
-    <!--style="width:600px;height:250px;"-->
-
+<section id="plotPanel">
+    <h2 class="panelHeader">
+        <button type="button" class="panelToggle" aria-expanded="true">Plot</button>
+    </h2>
+    <div class="panelBody">
+        <div id="plotter"></div>
+    </div>
 </section>
-<section id="stats" class="toLeft">
-    <div id="basic"></div>
+<section id="stats">
+    <h2 class="panelHeader">
+        <button type="button" class="panelToggle" aria-expanded="true">Stats</button>
+    </h2>
+    <div class="panelBody statsBody">
 
     <div id="statsRequestArea">
         <button id="moreStats">more stats</button>
@@ -369,8 +345,6 @@
         </form>
     </div>
 
-</section>
-<section id="answer" class="toLeft">
     <div id="tableContainer">
         <table id="statsTable">
             <tr id="tableName" class="keeper">
@@ -396,6 +370,16 @@
             <tr id="rowFor-stats-8"></tr>
             <tr id="rowFor-stats-9"></tr>
         </table>
+    </div>
+    </div>
+</section>
+<section id="rollerPanel">
+    <h2 class="panelHeader">
+        <button type="button" class="panelToggle" aria-expanded="true">Roller</button>
+    </h2>
+    <div class="panelBody">
+        <p id="rollerEmpty">Submit a dice collection in "Inputs" to roll it here.</p>
+        <div id="rollerArea"></div>
     </div>
 </section>
 </body>

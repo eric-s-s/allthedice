@@ -11,6 +11,7 @@ function onPageLoad() {
         getTable(this);
     });
     allTableForms.data('tableObj', null);
+    buildRollerRows(allTableForms);
     allTableForms.each(function () {
         clearRollResults($(this));
     });
@@ -47,8 +48,54 @@ function onPageLoad() {
         const exampleText = $(this).find('b').text();
         const form = setUpExample(exampleText);
         getTable(form);
-    })
+    });
 
+    assignRollers();
+    setUpPanels();
+}
+
+// minimizable sections
+const minimizedPanelsKey = 'minimizedPanels';
+
+function setUpPanels() {
+    $('.panelToggle').click(function () {
+        const section = $(this).closest('section');
+        setPanelMinimized(section, !section.hasClass('minimized'));
+        saveMinimizedPanels();
+    });
+    loadMinimizedPanels().forEach(function (idStr) {
+        setPanelMinimized($(document.getElementById(idStr)), true);
+    });
+}
+
+function setPanelMinimized(sectionJQuery, isMinimized) {
+    sectionJQuery.toggleClass('minimized', isMinimized);
+    sectionJQuery.find('.panelToggle').attr('aria-expanded', String(!isMinimized));
+    const graphDiv = sectionJQuery.find('#plotter')[0];
+    if (!isMinimized && graphDiv !== undefined && graphDiv.data !== undefined) {
+        // plotly can't measure a hidden div, so re-fit once it is visible again.
+        Plotly.Plots.resize(graphDiv);
+    }
+}
+
+function saveMinimizedPanels() {
+    const minimized = $('section.minimized').map(function () {
+        return this.id;
+    }).get();
+    try {
+        localStorage.setItem(minimizedPanelsKey, JSON.stringify(minimized));
+    } catch (e) {
+        // storage unavailable: the page still works, it just won't remember.
+    }
+}
+
+function loadMinimizedPanels() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(minimizedPanelsKey));
+        return Array.isArray(stored) ? stored : [];
+    } catch (e) {
+        return [];
+    }
 }
 
 
@@ -94,7 +141,7 @@ function getTable(tableForm) {
     const requestStr = tableForm.tableQuery.value;
     $.ajax({
         type: "POST",
-        url: "https://kpt1e43ea7.execute-api.us-east-1.amazonaws.com/default/_construct",
+        url: getLambdaEndpoint(),
         data: JSON.stringify({"buildString": requestStr}),
         success: function (data) {processNewData($(tableForm), data);},
         timeout: 0,
@@ -104,6 +151,12 @@ function getTable(tableForm) {
             console.log(jqXHR);
             /** @namespace jqXHR.responseJSON */
             const errorJson = jqXHR.responseJSON;
+            if (errorJson === undefined) {
+                alert(
+                    'No response from the dice server at ' + getLambdaEndpoint()
+                );
+                return;
+            }
             alert(
                 jqXHR.status + ': ' + jqXHR.statusText + '\n' +
                 'error type: ' + errorJson.errorType + '\ndetails: ' + errorJson.errorMessage
@@ -263,20 +316,45 @@ function getTableObjStats(tableObj, index) {
 }
 
 // assignRollers
+function buildRollerRows(allTableFormsJQuery) {
+    const rollerArea = $('#rollerArea');
+    allTableFormsJQuery.each(function () {
+        rollerArea.append(
+            "<div class='rollerRow' id='rollerFor-" + this.id + "'>" +
+            "<button type='button' class='roller'>roll</button>" +
+            "<div class='tooltip rollDisplay'>None</div>" +
+            "<span class='rollerName'></span>" +
+            "</div>"
+        );
+    });
+}
+
+function getRollerRow(tableRequestJQuery) {
+    return $('#rollerFor-' + tableRequestJQuery[0].id);
+}
+
 function assignRollers() {
+    let rollerCount = 0;
     $('.tableRequest').each(function () {
             assignRoller($(this));
+            if ($(this).data('tableObj') !== null) {
+                rollerCount++;
+            }
         }
-    )
+    );
+    $('#rollerEmpty').toggle(rollerCount === 0);
 }
 
 function assignRoller(tableRequestJQuery) {
     const tableObj = tableRequestJQuery.data("tableObj");
-    const rollerButton = tableRequestJQuery.find('.roller');
+    const rollerRow = getRollerRow(tableRequestJQuery);
+    const rollerButton = rollerRow.find('.roller');
 
     rollerButton.off("click");
+    rollerRow.toggle(tableObj !== null);
 
     if (tableObj !== null) {
+        rollerRow.find('.rollerName').text(getDiceListString(tableObj.name));
         const rollerObject = new Roller(tableObj.roller.height, tableObj.roller.aliases);
         const rollResults = tableRequestJQuery.data("rollResults");
         rollerButton.click(function () {
@@ -307,7 +385,7 @@ function displayRollResults(tableRequestJQuery) {
     if (addTollTipText) {
         innerHTML += toolTipEnd;
     }
-    tableRequestJQuery.find('.rollDisplay')[0].innerHTML = innerHTML;
+    getRollerRow(tableRequestJQuery).find('.rollDisplay')[0].innerHTML = innerHTML;
 }
 
 function clearRollResults(tableRequestJQuery) {
