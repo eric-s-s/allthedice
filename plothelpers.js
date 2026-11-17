@@ -1,4 +1,4 @@
-function getDiceListString(diceTableName) {
+function getDiceList(diceTableName) {
     const prefix = '<DiceTable containing ';
     if (diceTableName.startsWith(prefix) && diceTableName.endsWith('>')) {
         return diceTableName.slice(prefix.length, -1);
@@ -55,6 +55,6 @@ function getRangeLabel(low, high) {
     return low === high ? String(low) : `${low} to ${high}`;
 }
 
-function getStatsTraceName(diceName, low, high, pctChance) {
-    return `${diceName} ${getRangeLabel(low, high)}: ${pctChance}%`;
+function getStatsTraceName(diceList, low, high, pctChance) {
+    return `${diceList} ${getRangeLabel(low, high)}: ${pctChance}%`;
 }

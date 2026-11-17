@@ -3,20 +3,20 @@ const assert = require('node:assert');
 const {loadScripts} = require('./load.js');
 
 const {
-    getDiceListString, getTraceColor, getStatsFillColor, getStatsFillTrace, getRangeLabel, getStatsTraceName,
+    getDiceList, getTraceColor, getStatsFillColor, getStatsFillTrace, getRangeLabel, getStatsTraceName,
 } = loadScripts(
     ['plothelpers.js'],
-    ['getDiceListString', 'getTraceColor', 'getStatsFillColor', 'getStatsFillTrace', 'getRangeLabel', 'getStatsTraceName'],
+    ['getDiceList', 'getTraceColor', 'getStatsFillColor', 'getStatsFillTrace', 'getRangeLabel', 'getStatsTraceName'],
 );
 
-test('getDiceListString strips the DiceTable wrapper from the lambda name', () => {
-    assert.strictEqual(getDiceListString('<DiceTable containing [1D6]>'), '[1D6]');
-    assert.strictEqual(getDiceListString('<DiceTable containing [2D4, 3D8]>'), '[2D4, 3D8]');
-    assert.strictEqual(getDiceListString('<DiceTable containing []>'), '[]');
+test('getDiceList strips the DiceTable wrapper from the lambda name', () => {
+    assert.strictEqual(getDiceList('<DiceTable containing [1D6]>'), '[1D6]');
+    assert.strictEqual(getDiceList('<DiceTable containing [2D4, 3D8]>'), '[2D4, 3D8]');
+    assert.strictEqual(getDiceList('<DiceTable containing []>'), '[]');
 });
 
-test('getDiceListString leaves anything else alone', () => {
-    assert.strictEqual(getDiceListString('[1D6]'), '[1D6]');
+test('getDiceList leaves anything else alone', () => {
+    assert.strictEqual(getDiceList('[1D6]'), '[1D6]');
 });
 
 test('getTraceColor cycles through ten colors', () => {

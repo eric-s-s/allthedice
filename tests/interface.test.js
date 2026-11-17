@@ -37,9 +37,9 @@ function getStatsTableRows(page) {
 }
 
 function getRollerRow(page, index = 0) {
-    const row = page.document.querySelectorAll('#rollerArea .rollerRow')[index];
+    const row = page.document.querySelectorAll('#rollerRows .rollerRow')[index];
     return {
-        name: row.querySelector('.rollerName').textContent,
+        diceList: row.querySelector('.rollerDiceList').textContent,
         rollButton: row.querySelector('button'),
         latestRoll: () => row.querySelector('.latestRoll').textContent,
         earlierRolls: () => row.querySelector('.earlierRolls').textContent,
@@ -148,7 +148,7 @@ test('a lambda error shows its type and message on the request and plots nothing
     const page = await openPageWithKnownTables();
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(');
-    const error = row.querySelector('.rowError');
+    const error = row.querySelector('.diceTableRequestError');
     assert.ok(!error.hidden);
     assert.strictEqual(error.textContent, 'ParseError: could not parse Die(');
     assert.deepStrictEqual(getLastTraces(page), []);
@@ -160,7 +160,7 @@ test('a lambda error without a type shows just the message', async () => {
     const page = await openPage({lambda});
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
-    assert.strictEqual(row.querySelector('.rowError').textContent, 'bad dice');
+    assert.strictEqual(row.querySelector('.diceTableRequestError').textContent, 'bad dice');
 });
 
 test('a failed response that is not JSON shows the status', async () => {
@@ -169,7 +169,7 @@ test('a failed response that is not JSON shows the status', async () => {
     const page = await openPage({lambda});
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
-    assert.strictEqual(row.querySelector('.rowError').textContent, 'The dice server answered 502 Bad Gateway.');
+    assert.strictEqual(row.querySelector('.diceTableRequestError').textContent, 'The dice server answered 502 Bad Gateway.');
 });
 
 test('a successful response that is not JSON is an error', async () => {
@@ -178,7 +178,7 @@ test('a successful response that is not JSON is an error', async () => {
     const page = await openPage({lambda});
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
-    assert.strictEqual(row.querySelector('.rowError').textContent, 'The dice server sent a response that was not JSON.');
+    assert.strictEqual(row.querySelector('.diceTableRequestError').textContent, 'The dice server sent a response that was not JSON.');
 });
 
 test('an unreachable lambda names the endpoint', async () => {
@@ -188,7 +188,7 @@ test('an unreachable lambda names the endpoint', async () => {
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
     assert.strictEqual(
-        row.querySelector('.rowError').textContent,
+        row.querySelector('.diceTableRequestError').textContent,
         `Could not reach the dice server at ${page.window.getLambdaEndpoint()}.`
     );
 });
@@ -198,8 +198,8 @@ test('a successful submit clears the previous error', async () => {
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(');
     await page.submitDiceTableRequest(row, 'Die(3)');
-    assert.ok(row.querySelector('.rowError').hidden);
-    assert.strictEqual(row.querySelector('.rowError').textContent, '');
+    assert.ok(row.querySelector('.diceTableRequestError').hidden);
+    assert.strictEqual(row.querySelector('.diceTableRequestError').textContent, '');
 });
 
 test('a failed resubmit keeps the dice table that was already loaded', async () => {
@@ -208,7 +208,7 @@ test('a failed resubmit keeps the dice table that was already loaded', async () 
     await page.submitDiceTableRequest(row, 'Die(3)');
     await page.submitDiceTableRequest(row, 'Die(');
     assert.deepStrictEqual(getTraceNames(page), ['[1D3]']);
-    assert.ok(!row.querySelector('.rowError').hidden);
+    assert.ok(!row.querySelector('.diceTableRequestError').hidden);
 });
 
 test('removing a dice table request removes its trace', async () => {
@@ -291,9 +291,9 @@ test('the roller has a row for each loaded dice table', async () => {
     await page.submitDiceTableRequest(first, 'Die(3)');
     await page.submitDiceTableRequest(third, 'Die(6)');
     assert.ok(!isShown(page, 'rollerEmpty'));
-    assert.strictEqual(page.document.querySelectorAll('#rollerArea .rollerRow').length, 2);
-    assert.strictEqual(getRollerRow(page, 0).name, '[1D3]');
-    assert.strictEqual(getRollerRow(page, 1).name, '[1D6]');
+    assert.strictEqual(page.document.querySelectorAll('#rollerRows .rollerRow').length, 2);
+    assert.strictEqual(getRollerRow(page, 0).diceList, '[1D3]');
+    assert.strictEqual(getRollerRow(page, 1).diceList, '[1D6]');
     assert.strictEqual(getRollerRow(page, 0).latestRoll(), 'None');
 });
 
@@ -398,7 +398,7 @@ test('a submitted stats request adds a stats row and a shaded trace for each loa
     const statsRow = getStatsTableRows(page)[4];
     assert.deepStrictEqual(statsRow, ['2 to 3', die3Stats.pctChance + '%', die6Stats.pctChance + '%']);
     const die3Cell = page.document.querySelectorAll('#statsTable tbody tr')[3].children[1];
-    assert.strictEqual(die3Cell.querySelector('.statDetail').textContent, '1 in ' + die3Stats.oneInChance);
+    assert.strictEqual(die3Cell.querySelector('.oneInChance').textContent, '1 in ' + die3Stats.oneInChance);
     assert.strictEqual(die3Cell.title, `${die3Stats.occurrences} of ${die3Stats.total} combinations`);
 
     const fills = getLastTraces(page).slice(2);
@@ -466,7 +466,7 @@ test('the plot says it is unavailable when plotly did not load', async () => {
     const page = await openPageWithKnownTables({hasPlotly: false});
     await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
     assert.strictEqual(
-        page.document.getElementById('plotter').textContent,
+        page.document.getElementById('plotDiv').textContent,
         'The plotting library did not load, so the plot is unavailable.'
     );
     assert.strictEqual(getStatsTableRows(page)[0][1], '[1D3]');
@@ -515,7 +515,7 @@ test('reopening the plot panel refits the plot', async () => {
     getPanelToggle(page, 'plot').click();
     assert.strictEqual(page.plotly.resizeCalls.length, 0);
     getPanelToggle(page, 'plot').click();
-    assert.deepStrictEqual(page.plotly.resizeCalls, [page.document.getElementById('plotter')]);
+    assert.deepStrictEqual(page.plotly.resizeCalls, [page.document.getElementById('plotDiv')]);
 });
 
 function getMenus(page) {

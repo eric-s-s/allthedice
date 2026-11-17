@@ -35,7 +35,7 @@ function onPageLoad() {
                 form,
                 input: form.elements.buildString,
                 submit: form.querySelector('[type=submit]'),
-                error: form.querySelector('.rowError'),
+                error: form.querySelector('.diceTableRequestError'),
                 swatch: form.querySelector('.swatch'),
             },
             isPending: false,
@@ -205,7 +205,7 @@ function onPageLoad() {
     }
 
     function renderPlot(loadedDiceTableRequests, submittedStatsResults) {
-        const plotDiv = document.getElementById('plotter');
+        const plotDiv = document.getElementById('plotDiv');
         document.getElementById('plotEmpty').hidden = loadedDiceTableRequests.length > 0;
         if (typeof Plotly === 'undefined') {
             plotDiv.textContent = 'The plotting library did not load, so the plot is unavailable.';
@@ -215,14 +215,14 @@ function onPageLoad() {
         const traces = loadedDiceTableRequests.map((diceTableRequest, loadedIndex) => ({
             x: diceTableRequest.diceTable.data.x,
             y: diceTableRequest.diceTable.data.y,
-            name: getDiceListString(diceTableRequest.diceTable.name),
+            name: getDiceList(diceTableRequest.diceTable.name),
             mode: diceTableRequest.diceTable.data.x.length <= 100 ? 'lines+markers' : 'lines',
             line: {color: getTraceColor(loadedIndex)},
             marker: {color: getTraceColor(loadedIndex)},
         }));
         submittedStatsResults.forEach(({low, high, colorShiftIndex, statsPerLoadedDiceTable}) => {
             loadedDiceTableRequests.forEach((diceTableRequest, loadedIndex) => {
-                const diceName = getDiceListString(diceTableRequest.diceTable.name);
+                const diceList = getDiceList(diceTableRequest.diceTable.name);
                 const {pctChance} = statsPerLoadedDiceTable[loadedIndex];
                 traces.push({
                     ...getStatsFillTrace(low, high, diceTableRequest.diceTable.data),
@@ -231,7 +231,7 @@ function onPageLoad() {
                     fill: 'tozeroy',
                     fillcolor: getStatsFillColor(loadedIndex, colorShiftIndex),
                     hoverinfo: 'skip',
-                    name: getStatsTraceName(diceName, low, high, pctChance),
+                    name: getStatsTraceName(diceList, low, high, pctChance),
                 });
             });
         });
@@ -272,9 +272,9 @@ function onPageLoad() {
         table.hidden = loadedDiceTableRequests.length === 0;
 
         const head = document.createElement('tr');
-        head.append(makeCell('th', ''));
+        head.append(makeElement('th', ''));
         loadedDiceTableRequests.forEach((diceTableRequest, loadedIndex) => {
-            const cell = makeCell('th', getDiceListString(diceTableRequest.diceTable.name));
+            const cell = makeElement('th', getDiceList(diceTableRequest.diceTable.name));
             cell.scope = 'col';
             cell.style.color = getTraceColor(loadedIndex);
             cell.title = diceTableRequest.diceTable.diceStr;
@@ -287,19 +287,19 @@ function onPageLoad() {
             ['Std dev', diceTable => String(diceTable.stddev)],
         ].map(([label, getValue]) => {
             const row = document.createElement('tr');
-            row.append(makeCell('th', label));
-            loadedDiceTableRequests.forEach(({diceTable}) => row.append(makeCell('td', getValue(diceTable))));
+            row.append(makeElement('th', label));
+            loadedDiceTableRequests.forEach(({diceTable}) => row.append(makeElement('td', getValue(diceTable))));
             return row;
         });
 
         submittedStatsResults.forEach(({low, high, statsPerLoadedDiceTable}) => {
             const row = document.createElement('tr');
-            row.append(makeCell('th', getRangeLabel(low, high)));
+            row.append(makeElement('th', getRangeLabel(low, high)));
             statsPerLoadedDiceTable.forEach(stat => {
-                const cell = makeCell('td', stat.pctChance + '%');
-                const detail = makeCell('span', '1 in ' + stat.oneInChance);
-                detail.className = 'statDetail';
-                cell.append(detail);
+                const cell = makeElement('td', stat.pctChance + '%');
+                const oneInChance = makeElement('span', '1 in ' + stat.oneInChance);
+                oneInChance.className = 'oneInChance';
+                cell.append(oneInChance);
                 cell.title = `${stat.occurrences} of ${stat.total} combinations`;
                 row.append(cell);
             });
@@ -312,22 +312,22 @@ function onPageLoad() {
 
     function renderRoller(loadedDiceTableRequests) {
         document.getElementById('rollerEmpty').hidden = loadedDiceTableRequests.length > 0;
-        document.getElementById('rollerArea').replaceChildren(...loadedDiceTableRequests.map(makeRollerRow));
+        document.getElementById('rollerRows').replaceChildren(...loadedDiceTableRequests.map(makeRollerRow));
     }
 
     function makeRollerRow(diceTableRequest) {
         const row = document.createElement('div');
         row.className = 'rollerRow';
 
-        const name = makeCell('span', getDiceListString(diceTableRequest.diceTable.name));
-        name.className = 'rollerName';
-        const button = makeCell('button', 'Roll');
+        const diceList = makeElement('span', getDiceList(diceTableRequest.diceTable.name));
+        diceList.className = 'rollerDiceList';
+        const button = makeElement('button', 'Roll');
         button.type = 'button';
         button.className = 'secondary';
-        const latestRoll = makeCell('div', '');
+        const latestRoll = makeElement('div', '');
         latestRoll.className = 'latestRoll';
         latestRoll.setAttribute('aria-live', 'polite');
-        const earlierRolls = makeCell('div', '');
+        const earlierRolls = makeElement('div', '');
         earlierRolls.className = 'earlierRolls';
 
         const showRolls = () => {
@@ -341,7 +341,7 @@ function onPageLoad() {
         });
         showRolls();
 
-        row.append(name, button, latestRoll, earlierRolls);
+        row.append(diceList, button, latestRoll, earlierRolls);
         return row;
     }
 }
@@ -388,15 +388,13 @@ function cloneTemplate(id) {
     return document.getElementById(id).content.firstElementChild.cloneNode(true);
 }
 
-function makeCell(tag, text) {
+function makeElement(tag, text) {
     const element = document.createElement(tag);
     element.textContent = text;
     return element;
 }
 
-function getMinimizedPanelsKey() {
-    return 'minimizedPanels';
-}
+const minimizedPanelsStorageKey = 'minimizedPanels';
 
 function setUpPanels() {
     const minimized = loadMinimizedPanels();
@@ -427,14 +425,14 @@ function refitPlotAfterReveal(plot) {
 function saveMinimizedPanels() {
     const minimized = [...document.querySelectorAll('.panel.minimized')].map(panel => panel.id);
     try {
-        localStorage.setItem(getMinimizedPanelsKey(), JSON.stringify(minimized));
+        localStorage.setItem(minimizedPanelsStorageKey, JSON.stringify(minimized));
     } catch (storageUnavailable) {
     }
 }
 
 function loadMinimizedPanels() {
     try {
-        const stored = JSON.parse(localStorage.getItem(getMinimizedPanelsKey()));
+        const stored = JSON.parse(localStorage.getItem(minimizedPanelsStorageKey));
         return Array.isArray(stored) ? stored : [];
     } catch (error) {
         return [];
