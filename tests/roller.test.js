@@ -2,12 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {loadScripts} = require('./load.js');
 
-const {Roller, randomBigIntBetween, randomBigIntBelow} = loadScripts(
-    ['roller.js'], ['Roller', 'randomBigIntBetween', 'randomBigIntBelow']
+const {AliasTableRoller, randomBigIntBetween, randomBigIntBelow} = loadScripts(
+    ['roller.js'], ['AliasTableRoller', 'randomBigIntBetween', 'randomBigIntBelow']
 );
 
-// Counts how many of `draws` values from `draw()` fall in each of `buckets` equal slices of
-// [0, limit), and checks every slice got close to its fair share.
 function assertUniform(draw, limit, {buckets = 10, draws = 50000} = {}) {
     const counts = new Array(buckets).fill(0);
     for (let i = 0; i < draws; i++) {
@@ -16,12 +14,10 @@ function assertUniform(draw, limit, {buckets = 10, draws = 50000} = {}) {
         counts[Number((value * BigInt(buckets)) / limit)]++;
     }
     const expected = draws / buckets;
-    // about 7 standard deviations for these sizes: a fair generator never fails this,
-    // a biased one (e.g. half the range unreachable) always does
-    const tolerance = 7 * Math.sqrt(expected);
+    const sevenSigmaTolerance = 7 * Math.sqrt(expected);
     counts.forEach((count, bucket) => {
         assert.ok(
-            Math.abs(count - expected) < tolerance,
+            Math.abs(count - expected) < sevenSigmaTolerance,
             `slice ${bucket} got ${count} draws, expected about ${expected}: ${counts}`
         );
     });
@@ -52,8 +48,7 @@ test('randomBigIntBelow is uniform on a small range', () => {
     assertUniform(() => randomBigIntBelow(10n), 10n);
 });
 
-test('randomBigIntBelow is uniform on a range just past a power of two', () => {
-    // the worst case for rejection sampling: almost half of all draws are rejected
+test('randomBigIntBelow is uniform just past a power of two, where almost half of all draws are rejected', () => {
     const limit = 2n ** 20n + 1n;
     assertUniform(() => randomBigIntBelow(limit), limit);
 });
@@ -77,12 +72,12 @@ test('randomBigIntBetween accepts numbers and strings like the lambda sends', ()
     assert.ok(value >= 0n && value <= 5n);
 });
 
-test('Roller converts heights to BigInt and copies the aliases', () => {
+test('AliasTableRoller converts heights to BigInt and copies the aliases', () => {
     const aliases = [
         {primary: '1', alternate: '2', primaryHeight: '3'},
         {primary: '2', alternate: '2', primaryHeight: '5'},
     ];
-    const roller = new Roller('5', aliases);
+    const roller = new AliasTableRoller('5', aliases);
     assert.strictEqual(roller.height, 5n);
     assert.deepStrictEqual(roller.aliases, [
         {primary: '1', alternate: '2', primaryHeight: 3n},
@@ -91,33 +86,32 @@ test('Roller converts heights to BigInt and copies the aliases', () => {
     assert.notStrictEqual(roller.aliases, aliases);
 });
 
-test('Roller.roll picks the column, then primary below primaryHeight and alternate at or above it', () => {
+test('AliasTableRoller.roll picks the column, then primary below primaryHeight and alternate at or above it', () => {
     const aliases = [
         {primary: '1', alternate: '4', primaryHeight: '3'},
         {primary: '2', alternate: '5', primaryHeight: '2'},
     ];
-    // a fake randomizer that returns queued answers: column first, then height
-    const answers = [];
-    const fake = () => answers.shift();
-    const roller = new Roller('5', aliases, fake);
+    const queuedColumnThenHeight = [];
+    const fakeRandomizerFromQueue = () => queuedColumnThenHeight.shift();
+    const roller = new AliasTableRoller('5', aliases, fakeRandomizerFromQueue);
 
-    answers.push(0n, 2n);
+    queuedColumnThenHeight.push(0n, 2n);
     assert.strictEqual(roller.roll(), '1', 'column 0, height 2 < 3: primary');
-    answers.push(0n, 3n);
+    queuedColumnThenHeight.push(0n, 3n);
     assert.strictEqual(roller.roll(), '4', 'column 0, height 3 >= 3: alternate');
-    answers.push(1n, 1n);
+    queuedColumnThenHeight.push(1n, 1n);
     assert.strictEqual(roller.roll(), '2', 'column 1, height 1 < 2: primary');
-    answers.push(1n, 4n);
+    queuedColumnThenHeight.push(1n, 4n);
     assert.strictEqual(roller.roll(), '5', 'column 1, height 4 >= 2: alternate');
 });
 
-test('Roller.roll asks for a column in [0, columns - 1] and a height in [0, height - 1]', () => {
+test('AliasTableRoller.roll asks for a column in [0, columns - 1] and a height in [0, height - 1]', () => {
     const calls = [];
     const fake = (low, high) => {
         calls.push([low, high]);
         return low;
     };
-    new Roller('7', [
+    new AliasTableRoller('7', [
         {primary: '1', alternate: '1', primaryHeight: '7'},
         {primary: '2', alternate: '2', primaryHeight: '7'},
         {primary: '3', alternate: '3', primaryHeight: '7'},
@@ -125,10 +119,9 @@ test('Roller.roll asks for a column in [0, columns - 1] and a height in [0, heig
     assert.deepStrictEqual(calls, [[0n, 2n], [0n, 6n]]);
 });
 
-test('Roller rolls a fair die evenly', () => {
-    // the alias table the lambda sends for Die(6)
-    const aliases = ['6', '5', '4', '3', '2', '1'].map(roll => ({primary: roll, alternate: roll, primaryHeight: '6'}));
-    const roller = new Roller('6', aliases);
+test('AliasTableRoller rolls a fair die evenly', () => {
+    const die6AliasTable = ['6', '5', '4', '3', '2', '1'].map(roll => ({primary: roll, alternate: roll, primaryHeight: '6'}));
+    const roller = new AliasTableRoller('6', die6AliasTable);
     const counts = {};
     const draws = 60000;
     for (let i = 0; i < draws; i++) {
@@ -139,14 +132,12 @@ test('Roller rolls a fair die evenly', () => {
     Object.values(counts).forEach(count => assert.ok(Math.abs(count - draws / 6) < 7 * Math.sqrt(draws / 6)));
 });
 
-test('Roller follows a weighted alias table', () => {
-    // 1 one-third of the time, 2 two-thirds: column 0 is all 1s below height 2 of 3,
-    // column 1 is all 2s, so 1 comes up (2/3 * 1/2) = 1/3 of the time
-    const aliases = [
+test('AliasTableRoller follows a weighted alias table', () => {
+    const oneThirdOnesAliasTable = [
         {primary: '1', alternate: '2', primaryHeight: '2'},
         {primary: '2', alternate: '2', primaryHeight: '3'},
     ];
-    const roller = new Roller('3', aliases);
+    const roller = new AliasTableRoller('3', oneThirdOnesAliasTable);
     const draws = 60000;
     let ones = 0;
     for (let i = 0; i < draws; i++) {

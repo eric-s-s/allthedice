@@ -3,8 +3,11 @@
 # opens a file in the default browser: xdg-open on Linux, open on macOS
 OPEN := $(shell command -v xdg-open 2>/dev/null || echo open)
 
-test:
+test: node_modules/.package-lock.json
 	node --test tests/
+
+node_modules/.package-lock.json: package-lock.json
+	npm ci
 
 # switch config.js to the local dev server (localhost:8000) and open the page.
 # the browser is started in the background so the terminal is free right away.

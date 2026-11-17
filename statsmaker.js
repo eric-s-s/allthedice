@@ -1,4 +1,3 @@
-// Every integer roll from low to high inclusive, in either order: getRollRange(3, 1) is [1, 2, 3].
 function getRollRange(low, high) {
     const start = Math.min(low, high);
     const stop = Math.max(low, high);

@@ -351,7 +351,7 @@ input[type=text] {
 
 /* ---------- inputs ---------- */
 
-.collection {
+.diceTableRequest {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     align-items: center;
@@ -359,7 +359,7 @@ input[type=text] {
     margin-bottom: 8px;
 }
 
-/* the plot color of this collection; dashed outline until it has been calculated */
+/* the plot color of this dice table; dashed outline until it has loaded */
 .swatch {
     width: 14px;
     height: 14px;
@@ -466,7 +466,7 @@ input[type=text] {
     font-weight: 500;
 }
 
-.rollDisplay {
+.latestRoll {
     min-width: 3em;
     padding: 3px 10px;
     font-weight: 600;
@@ -478,7 +478,7 @@ input[type=text] {
 }
 
 /* padding keeps the scrollbar below the numbers instead of over them */
-.rollHistory {
+.earlierRolls {
     padding-bottom: 14px;
     overflow-x: auto;
     white-space: nowrap;
@@ -529,15 +529,15 @@ input[type=text] {
         width: auto;
     }
 
-    .collection {
+    .diceTableRequest {
         grid-template-columns: auto minmax(0, 1fr) auto;
     }
 
-    .collection input {
+    .diceTableRequest input {
         grid-column: 2 / -1;
     }
 
-    .collection .primary {
+    .diceTableRequest .primary {
         grid-column: 2;
         justify-self: start;
     }

@@ -1,5 +1,3 @@
-// Numbers in scientific notation (mantissa * 10^power), so the page can work with
-// probabilities and counts far beyond what a JavaScript number can hold.
 class SciNum {
     constructor(mantissa, power) {
         this.mantissa = parseFloat(mantissa);

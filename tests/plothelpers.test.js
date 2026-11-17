@@ -32,8 +32,8 @@ test('getStatsFillColor shifts the trace color per range and stays half transpar
 });
 
 test('getStatsFillColor keeps channels within 0 to 255', () => {
-    // orange (255, 127, 14) shifted by +10 red
-    assert.strictEqual(getStatsFillColor(1, 1), 'rgba(255,137,24,0.5)');
+    const orangeShiftedPastMaxRed = getStatsFillColor(1, 1);
+    assert.strictEqual(orangeShiftedPastMaxRed, 'rgba(255,137,24,0.5)');
 });
 
 const die = {x: [1, 2, 3, 4], y: [10, 20, 30, 40]};
@@ -60,11 +60,10 @@ test('getStatsFillTrace is empty when the range misses every roll', () => {
 });
 
 test('getStatsFillTrace handles rolls that skip numbers', () => {
-    // 2*StrongDie(Die(6), 3) rolls 6, 9, 12, ...
-    const strong = {x: [6, 9, 12], y: [1, 2, 1]};
-    const fill = getStatsFillTrace(7, 12, strong);
+    const everyThirdRoll = {x: [6, 9, 12], y: [1, 2, 1]};
+    const fill = getStatsFillTrace(7, 12, everyThirdRoll);
     assert.deepStrictEqual(fill.x.map(x => +x.toFixed(2)), [7.56, 9, 12]);
-    assert.deepStrictEqual(getStatsFillTrace(7, 8, strong), {x: [], y: []});
+    assert.deepStrictEqual(getStatsFillTrace(7, 8, everyThirdRoll), {x: [], y: []});
 });
 
 test('getRangeLabel and getStatsTraceName', () => {

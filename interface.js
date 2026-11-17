@@ -1,105 +1,104 @@
-// Page behavior. All page state lives inside onPageLoad; after any change, render() redraws
-// the plot, the stats table and the roller from that state.
 document.addEventListener('DOMContentLoaded', onPageLoad);
 
 function onPageLoad() {
-    // each: {form, input, submit, error, swatch, table, rolls, roller, busy}
-    const collections = [];
+    const diceTableRequests = [];
     // each: {form, low, high, bounds}, bounds is [low, high] once submitted
     const ranges = [];
 
-    const collectionList = document.getElementById('collectionList');
+    const diceTableRequestList = document.getElementById('diceTableRequestList');
     const rangeList = document.getElementById('rangeList');
 
     setUpPanels();
     setUpMenus();
 
-    document.getElementById('addCollection').addEventListener('click', () => addCollection().input.focus());
+    document.getElementById('addDiceTableRequest').addEventListener('click', () =>
+        addDiceTableRequest().domElements.input.focus()
+    );
     document.getElementById('addRange').addEventListener('click', () => addRange().low.focus());
     document.querySelectorAll('.example').forEach(button => {
         button.addEventListener('click', () => {
             button.closest('details').open = false;
-            calculateExample(button.dataset.build);
+            getExampleDiceTable(button.dataset.build);
         });
     });
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
 
-    addCollection();
+    addDiceTableRequest();
     addRange();
     render();
 
-    // ---------- dice collections ----------
-
-    function addCollection() {
-        const form = cloneTemplate('collectionTemplate');
-        const collection = {
-            form,
-            input: form.elements.buildString,
-            submit: form.querySelector('[type=submit]'),
-            error: form.querySelector('.rowError'),
-            swatch: form.querySelector('.swatch'),
-            table: null,
-            rolls: [],
+    function addDiceTableRequest() {
+        const form = cloneTemplate('diceTableRequestTemplate');
+        const request = {
+            domElements: {
+                form,
+                input: form.elements.buildString,
+                submit: form.querySelector('[type=submit]'),
+                error: form.querySelector('.rowError'),
+                swatch: form.querySelector('.swatch'),
+            },
+            isPending: false,
+            diceTable: null,
             roller: null,
-            busy: false,
+            rollHistory: [],
         };
         form.addEventListener('submit', event => {
             event.preventDefault();
-            calculate(collection);
+            getDiceTable(request);
         });
-        form.querySelector('.remove').addEventListener('click', () => removeCollection(collection));
-        collections.push(collection);
-        collectionList.append(form);
-        return collection;
+        form.querySelector('.remove').addEventListener('click', () => removeDiceTableRequest(request));
+        diceTableRequests.push(request);
+        diceTableRequestList.append(form);
+        return request;
     }
 
-    function removeCollection(collection) {
-        collections.splice(collections.indexOf(collection), 1);
-        collection.form.remove();
-        if (collections.length === 0) {
-            addCollection();
+    function removeDiceTableRequest(request) {
+        diceTableRequests.splice(diceTableRequests.indexOf(request), 1);
+        request.domElements.form.remove();
+        if (diceTableRequests.length === 0) {
+            addDiceTableRequest();
         }
         render();
     }
 
-    function calculateExample(buildString) {
-        const blank = collections.find(c => c.table === null && !c.busy && c.input.value.trim() === '');
-        const collection = blank || addCollection();
-        collection.input.value = buildString;
-        calculate(collection);
+    function getExampleDiceTable(buildString) {
+        const blank = diceTableRequests.find(r =>
+            r.diceTable === null && !r.isPending && r.domElements.input.value.trim() === ''
+        );
+        const request = blank || addDiceTableRequest();
+        request.domElements.input.value = buildString;
+        getDiceTable(request);
     }
 
-    async function calculate(collection) {
-        if (collection.busy) {
+    async function getDiceTable(request) {
+        if (request.isPending) {
             return;
         }
-        setBusy(collection, true);
-        showError(collection, '');
+        setPending(request, true);
+        showError(request, '');
         try {
-            const table = await fetchTable(collection.input.value);
-            collection.table = table;
-            collection.rolls = [];
-            collection.roller = new Roller(table.roller.height, table.roller.aliases);
+            const diceTable = await fetchDiceTable(request.domElements.input.value);
+            request.diceTable = diceTable;
+            request.roller = new AliasTableRoller(diceTable.roller.height, diceTable.roller.aliases);
+            request.rollHistory = [];
             render();
         } catch (error) {
-            showError(collection, error.message);
+            showError(request, error.message);
         } finally {
-            setBusy(collection, false);
+            setPending(request, false);
         }
     }
 
-    function setBusy(collection, busy) {
-        collection.busy = busy;
-        collection.submit.disabled = busy;
-        collection.form.setAttribute('aria-busy', String(busy));
+    function setPending(request, isPending) {
+        request.isPending = isPending;
+        request.domElements.submit.disabled = isPending;
+        request.domElements.form.setAttribute('aria-busy', String(isPending));
     }
 
-    function showError(collection, message) {
-        collection.error.textContent = message;
-        collection.error.hidden = message === '';
+    function showError(request, message) {
+        request.domElements.error.textContent = message;
+        request.domElements.error.hidden = message === '';
     }
-
-    // ---------- stats ranges ----------
 
     function addRange() {
         const form = cloneTemplate('rangeTemplate');
@@ -114,7 +113,7 @@ function onPageLoad() {
         form.querySelector('.remove').addEventListener('click', () => removeRange(range));
         ranges.push(range);
         rangeList.append(form);
-        setRangeLimits(range, getCalculated());
+        setRangeLimits(range, getLoadedDiceTableRequests());
         return range;
     }
 
@@ -127,18 +126,18 @@ function onPageLoad() {
         render();
     }
 
-    // keep range inputs within the rolls the calculated collections can make
-    function setRangeLimits(range, calculated) {
+    // keep range inputs within the rolls the loaded dice tables can make
+    function setRangeLimits(range, loaded) {
         const inputs = [range.low, range.high];
-        if (calculated.length === 0) {
+        if (loaded.length === 0) {
             inputs.forEach(input => {
                 input.removeAttribute('min');
                 input.removeAttribute('max');
             });
             return;
         }
-        const min = Math.min(...calculated.map(c => c.table.range[0]));
-        const max = Math.max(...calculated.map(c => c.table.range[1]));
+        const min = Math.min(...loaded.map(r => r.diceTable.range[0]));
+        const max = Math.max(...loaded.map(r => r.diceTable.range[1]));
         inputs.forEach(input => {
             input.min = min;
             input.max = max;
@@ -151,54 +150,52 @@ function onPageLoad() {
         }
     }
 
-    // ---------- rendering ----------
-
-    function getCalculated() {
-        return collections.filter(c => c.table !== null);
+    function getLoadedDiceTableRequests() {
+        return diceTableRequests.filter(r => r.diceTable !== null);
     }
 
     function render() {
-        const calculated = getCalculated();
+        const loaded = getLoadedDiceTableRequests();
         const submitted = ranges.filter(r => r.bounds !== null);
-        // stats[rangeIndex][collectionIndex], shared by the plot legend and the stats table
-        const stats = submitted.map(range => calculated.map(c =>
-            getStats(c.table.forSciNum, getRollRange(range.bounds[0], range.bounds[1]))
+        // stats[rangeIndex][loadedIndex], shared by the plot legend and the stats table
+        const stats = submitted.map(range => loaded.map(r =>
+            getStats(r.diceTable.forSciNum, getRollRange(range.bounds[0], range.bounds[1]))
         ));
 
-        collections.forEach(collection => {
-            const index = calculated.indexOf(collection);
-            collection.swatch.classList.toggle('active', index !== -1);
-            collection.swatch.style.background = index === -1 ? '' : getTraceColor(index);
+        diceTableRequests.forEach(request => {
+            const index = loaded.indexOf(request);
+            request.domElements.swatch.classList.toggle('active', index !== -1);
+            request.domElements.swatch.style.background = index === -1 ? '' : getTraceColor(index);
         });
-        ranges.forEach(range => setRangeLimits(range, calculated));
+        ranges.forEach(range => setRangeLimits(range, loaded));
 
-        renderPlot(calculated, submitted, stats);
-        renderStatsTable(calculated, submitted, stats);
-        renderRoller(calculated);
+        renderPlot(loaded, submitted, stats);
+        renderStatsTable(loaded, submitted, stats);
+        renderRoller(loaded);
     }
 
-    function renderPlot(calculated, submitted, stats) {
+    function renderPlot(loaded, submitted, stats) {
         const plotDiv = document.getElementById('plotter');
-        document.getElementById('plotEmpty').hidden = calculated.length > 0;
+        document.getElementById('plotEmpty').hidden = loaded.length > 0;
         if (typeof Plotly === 'undefined') {
             plotDiv.textContent = 'The plotting library did not load, so the plot is unavailable.';
             return;
         }
 
-        const traces = calculated.map((collection, index) => ({
-            x: collection.table.data.x,
-            y: collection.table.data.y,
-            name: getDiceListString(collection.table.name),
-            mode: collection.table.data.x.length <= 100 ? 'lines+markers' : 'lines',
+        const traces = loaded.map((request, index) => ({
+            x: request.diceTable.data.x,
+            y: request.diceTable.data.y,
+            name: getDiceListString(request.diceTable.name),
+            mode: request.diceTable.data.x.length <= 100 ? 'lines+markers' : 'lines',
             line: {color: getTraceColor(index)},
             marker: {color: getTraceColor(index)},
         }));
         submitted.forEach((range, submittedIndex) => {
             const [low, high] = range.bounds;
-            calculated.forEach((collection, index) => {
-                const diceName = getDiceListString(collection.table.name);
+            loaded.forEach((request, index) => {
+                const diceName = getDiceListString(request.diceTable.name);
                 traces.push({
-                    ...getStatsFillTrace(low, high, collection.table.data),
+                    ...getStatsFillTrace(low, high, request.diceTable.data),
                     type: 'scatter',
                     mode: 'none',
                     fill: 'tozeroy',
@@ -213,6 +210,7 @@ function onPageLoad() {
         const textColor = style.getPropertyValue('--text').trim();
         const gridColor = style.getPropertyValue('--border').trim();
         const axis = {gridcolor: gridColor, zerolinecolor: gridColor, linecolor: gridColor};
+        const legendAbovePlot = {orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom'};
         const layout = {
             margin: {t: 10, r: 10, b: 10, l: 60},
             paper_bgcolor: 'rgba(0,0,0,0)',
@@ -224,40 +222,43 @@ function onPageLoad() {
                 activecolor: style.getPropertyValue('--accent').trim(),
             },
             showlegend: true,
-            // above the plot, so it never collides with the x axis title
-            legend: {orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom'},
+            legend: legendAbovePlot,
             xaxis: {...axis, title: {text: 'roll'}, automargin: true},
             yaxis: {...axis, title: {text: '% chance'}, rangemode: 'tozero', automargin: true},
         };
-        // on narrow screens the toolbar covers the legend; phones have pinch-zoom anyway
-        const narrow = window.matchMedia('(max-width: 700px)').matches;
-        const config = {responsive: true, displaylogo: false, showSendToCloud: false, displayModeBar: !narrow};
+        const toolbarWouldCoverLegend = window.matchMedia('(max-width: 700px)').matches;
+        const config = {
+            responsive: true,
+            displaylogo: false,
+            showSendToCloud: false,
+            displayModeBar: !toolbarWouldCoverLegend,
+        };
         Plotly.react(plotDiv, traces, layout, config);
     }
 
-    function renderStatsTable(calculated, submitted, stats) {
+    function renderStatsTable(loaded, submitted, stats) {
         const table = document.getElementById('statsTable');
-        document.getElementById('statsEmpty').hidden = calculated.length > 0;
-        table.hidden = calculated.length === 0;
+        document.getElementById('statsEmpty').hidden = loaded.length > 0;
+        table.hidden = loaded.length === 0;
 
         const head = document.createElement('tr');
         head.append(makeCell('th', ''));
-        calculated.forEach((collection, index) => {
-            const cell = makeCell('th', getDiceListString(collection.table.name));
+        loaded.forEach((request, index) => {
+            const cell = makeCell('th', getDiceListString(request.diceTable.name));
             cell.scope = 'col';
             cell.style.color = getTraceColor(index);
-            cell.title = collection.table.diceStr;
+            cell.title = request.diceTable.diceStr;
             head.append(cell);
         });
 
         const rows = [
-            ['Range', c => getRangeLabel(c.table.range[0], c.table.range[1])],
-            ['Mean', c => String(c.table.mean)],
-            ['Std dev', c => String(c.table.stddev)],
+            ['Range', r => getRangeLabel(r.diceTable.range[0], r.diceTable.range[1])],
+            ['Mean', r => String(r.diceTable.mean)],
+            ['Std dev', r => String(r.diceTable.stddev)],
         ].map(([label, getValue]) => {
             const row = document.createElement('tr');
             row.append(makeCell('th', label));
-            calculated.forEach(c => row.append(makeCell('td', getValue(c))));
+            loaded.forEach(r => row.append(makeCell('td', getValue(r))));
             return row;
         });
 
@@ -279,46 +280,43 @@ function onPageLoad() {
         table.tBodies[0].replaceChildren(...rows);
     }
 
-    function renderRoller(calculated) {
-        document.getElementById('rollerEmpty').hidden = calculated.length > 0;
-        document.getElementById('rollerArea').replaceChildren(...calculated.map(makeRollerRow));
+    function renderRoller(loaded) {
+        document.getElementById('rollerEmpty').hidden = loaded.length > 0;
+        document.getElementById('rollerArea').replaceChildren(...loaded.map(makeRollerRow));
     }
 
-    function makeRollerRow(collection) {
+    function makeRollerRow(request) {
         const row = document.createElement('div');
         row.className = 'rollerRow';
 
-        const name = makeCell('span', getDiceListString(collection.table.name));
+        const name = makeCell('span', getDiceListString(request.diceTable.name));
         name.className = 'rollerName';
         const button = makeCell('button', 'Roll');
         button.type = 'button';
         button.className = 'secondary';
-        const display = makeCell('div', '');
-        display.className = 'rollDisplay';
-        display.setAttribute('aria-live', 'polite');
-        const history = makeCell('div', '');
-        history.className = 'rollHistory';
+        const latestRoll = makeCell('div', '');
+        latestRoll.className = 'latestRoll';
+        latestRoll.setAttribute('aria-live', 'polite');
+        const earlierRolls = makeCell('div', '');
+        earlierRolls.className = 'earlierRolls';
 
         const showRolls = () => {
-            const rolls = collection.rolls;
-            display.textContent = rolls.length === 0 ? 'None' : rolls[rolls.length - 1];
-            // earlier rolls, newest first
-            history.textContent = rolls.slice(0, -1).reverse().join(', ');
+            const [latest, ...earlier] = request.rollHistory;
+            latestRoll.textContent = latest ?? 'None';
+            earlierRolls.textContent = earlier.join(', ');
         };
         button.addEventListener('click', () => {
-            collection.rolls.push(collection.roller.roll());
+            request.rollHistory.unshift(request.roller.roll());
             showRolls();
         });
         showRolls();
 
-        row.append(name, button, display, history);
+        row.append(name, button, latestRoll, earlierRolls);
         return row;
     }
 }
 
-// ---------- helpers that don't touch page state ----------
-
-async function fetchTable(buildString) {
+async function fetchDiceTable(buildString) {
     let response;
     try {
         // a plain-text body keeps this a "simple" cross-origin request (no preflight)
@@ -329,12 +327,7 @@ async function fetchTable(buildString) {
     } catch (error) {
         throw new Error(`Could not reach the dice server at ${getLambdaEndpoint()}.`);
     }
-    let body = null;
-    try {
-        body = await response.json();
-    } catch (error) {
-        // not JSON; handled below
-    }
+    const body = await parseJsonOrNull(response);
     if (!response.ok) {
         if (body && body.errorMessage) {
             throw new Error(body.errorType ? `${body.errorType}: ${body.errorMessage}` : body.errorMessage);
@@ -347,6 +340,14 @@ async function fetchTable(buildString) {
     return body;
 }
 
+async function parseJsonOrNull(response) {
+    try {
+        return await response.json();
+    } catch (notJson) {
+        return null;
+    }
+}
+
 function cloneTemplate(id) {
     return document.getElementById(id).content.firstElementChild.cloneNode(true);
 }
@@ -356,8 +357,6 @@ function makeCell(tag, text) {
     element.textContent = text;
     return element;
 }
-
-// ---------- minimizable panels ----------
 
 function getMinimizedPanelsKey() {
     return 'minimizedPanels';
@@ -381,17 +380,19 @@ function setPanelMinimized(panel, isMinimized) {
     panel.querySelector('.panelToggle').setAttribute('aria-expanded', String(!isMinimized));
     const plot = panel.querySelector('.js-plotly-plot');
     if (!isMinimized && plot !== null) {
-        // plotly can't measure a hidden div, so re-fit once it is visible again
-        Plotly.Plots.resize(plot);
+        refitPlotAfterReveal(plot);
     }
+}
+
+function refitPlotAfterReveal(plot) {
+    Plotly.Plots.resize(plot);
 }
 
 function saveMinimizedPanels() {
     const minimized = [...document.querySelectorAll('.panel.minimized')].map(panel => panel.id);
     try {
         localStorage.setItem(getMinimizedPanelsKey(), JSON.stringify(minimized));
-    } catch (error) {
-        // storage unavailable: the page still works, it just won't remember
+    } catch (storageUnavailable) {
     }
 }
 
@@ -404,11 +405,14 @@ function loadMinimizedPanels() {
     }
 }
 
-// ---------- help menus ----------
-
-// one menu open at a time; clicking elsewhere or pressing Escape closes it
 function setUpMenus() {
     const menus = [...document.querySelectorAll('details.menu')];
+    closeOtherMenusWhenOneOpens(menus);
+    closeMenusOnOutsideClick(menus);
+    closeMenusOnEscape(menus);
+}
+
+function closeOtherMenusWhenOneOpens(menus) {
     menus.forEach(menu => menu.addEventListener('toggle', () => {
         if (menu.open) {
             menus.filter(other => other !== menu).forEach(other => {
@@ -416,11 +420,17 @@ function setUpMenus() {
             });
         }
     }));
+}
+
+function closeMenusOnOutsideClick(menus) {
     document.addEventListener('click', event => {
         menus.filter(menu => menu.open && !menu.contains(event.target)).forEach(menu => {
             menu.open = false;
         });
     });
+}
+
+function closeMenusOnEscape(menus) {
     document.addEventListener('keydown', event => {
         if (event.key !== 'Escape') {
             return;

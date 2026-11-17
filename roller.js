@@ -1,8 +1,4 @@
-// Rolls a dice collection using the alias table the lambda sends (Vose's alias method):
-// pick a column uniformly, then pick a height in that column uniformly; below the
-// column's primaryHeight is the primary roll, otherwise the alternate.
-// Heights are BigInt, so tables with more than 2^53 combinations stay exact.
-class Roller {
+class AliasTableRoller {
     constructor(height, aliases, randBetween = randomBigIntBetween) {
         this.height = BigInt(height);
         this.aliases = aliases.map(alias => ({
@@ -21,7 +17,6 @@ class Roller {
     }
 }
 
-// A uniformly random BigInt from low to high inclusive, in either order.
 function randomBigIntBetween(low, high) {
     let start = BigInt(low);
     let stop = BigInt(high);
@@ -31,10 +26,6 @@ function randomBigIntBetween(low, high) {
     return start + randomBigIntBelow(stop - start + 1n);
 }
 
-// A uniformly random BigInt from 0 to limit - 1, from crypto.getRandomValues.
-// Draws just enough random bits to cover the range and draws again whenever the result
-// is too big (rejection sampling), so every value is equally likely. Each draw succeeds
-// with probability over 1/2.
 function randomBigIntBelow(limit) {
     if (limit <= 0n) {
         throw new RangeError('limit must be positive, got ' + limit);

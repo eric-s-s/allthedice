@@ -150,8 +150,8 @@
             <button type="button" class="panelToggle" aria-expanded="true">Inputs</button>
         </h2>
         <div class="panelBody">
-            <div id="collectionList"></div>
-            <button type="button" class="secondary" id="addCollection">+ Add dice collection</button>
+            <div id="diceTableRequestList"></div>
+            <button type="button" class="secondary" id="addDiceTableRequest">+ Add dice collection</button>
         </div>
     </section>
 
@@ -193,8 +193,8 @@
     </section>
 </main>
 
-<template id="collectionTemplate">
-    <form class="collection">
+<template id="diceTableRequestTemplate">
+    <form class="diceTableRequest">
         <span class="swatch" aria-hidden="true"></span>
         <input type="text" name="buildString" aria-label="Dice collection" autocomplete="off" spellcheck="false"
                placeholder="e.g. 2*Die(6)&amp;3*WeightedDie({1:1, 2:3})">
