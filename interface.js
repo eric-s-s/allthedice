@@ -1,464 +1,477 @@
-$(onPageLoad);
+document.addEventListener('DOMContentLoaded', onPageLoad);
 
 function onPageLoad() {
-    const allTableForms = $('.tableRequest');
-    const allStatsForms = $('.statsRequest');
-    const tableRequestArea = $('#tableRequestArea');
-    const statRequestArea = $('#statsRequestArea');
+    const diceTableRequests = [];
+    const statsRequests = [];
 
-    allTableForms.submit(function (event) {
-        event.preventDefault();
-        getTable(this);
-    });
-    allTableForms.data('tableObj', null);
-    allTableForms.each(function () {
-        clearRollResults($(this));
-    });
+    const diceTableRequestList = document.getElementById('diceTableRequestList');
+    const statsRequestList = document.getElementById('statsRequestList');
 
-    allStatsForms.submit(function (event) {
-        event.preventDefault();
-        const tableEntries = plotStats(this);
-        showStatsRow(this, tableEntries);
-    });
+    setUpPanels();
+    setUpMenus();
 
-    setUpHiddenForms(statRequestArea, allStatsForms);
-    setUpHiddenForms(tableRequestArea, allTableForms);
-
-    showHiddenForm(tableRequestArea);
-    // getTable(document.getElementById(idStr));
-
-    showHiddenForm(statRequestArea);
-
-    $('#more').click(function () {
-        showHiddenForm(tableRequestArea);
-    });
-    $('#moreStats').click(function () {
-        showHiddenForm(statRequestArea);
-    });
-
-    $('.rmStats').click(function () {
-        hideStatsForm(this.parentNode.id);
-    });
-
-    $('.rmTable').click(function () {
-        hideTableForm(this.parentNode.id);
-    });
-    $('.exampleClickable').click(function () {
-        const exampleText = $(this).find('b').text();
-        const form = setUpExample(exampleText);
-        getTable(form);
-    })
-
-}
-
-
-function setUpHiddenForms(containerJQuery, classJQuery) {
-    const hiddenForms = [];
-    classJQuery.each(function () {
-        $(this).hide();
-        hiddenForms.push(this.id);
-    });
-    hiddenForms.sort();
-    containerJQuery.data('hiddenForms', hiddenForms);
-}
-
-
-function setUpExample(exampleStr) {
-    const requestArea = $('#tableRequestArea');
-    let nextFormIdStr = showHiddenForm(requestArea);
-    if (nextFormIdStr === null) {
-        nextFormIdStr = $('.tableRequest')[0].id;
-    }
-    const toAlter = document.getElementById(nextFormIdStr);
-    toAlter.tableQuery.value = exampleStr;
-    return toAlter;
-}
-
-function processNewData(tableRequestJQuery, data) {
-    unlockForm(tableRequestJQuery);
-    console.log(data);
-    tableRequestJQuery.data('tableObj', data);
-    plotCurrentTables();
-    resetStatsTable();
-    clearRollResults(tableRequestJQuery);
-    assignRollers();
-}
-
-function getTable(tableForm) {
-
-    const tableFormJQuery = $(tableForm);
-    if (tableFormJQuery.data(isLockedKey)) {
-        return
-    }
-    lockForm(tableFormJQuery);
-    const requestStr = tableForm.tableQuery.value;
-    $.ajax({
-        type: "POST",
-        url: "https://kpt1e43ea7.execute-api.us-east-1.amazonaws.com/default/_construct",
-        data: JSON.stringify({"buildString": requestStr}),
-        success: function (data) {processNewData($(tableForm), data);},
-        timeout: 0,
-    }).fail(
-        function (jqXHR) {
-            unlockForm(tableFormJQuery);
-            console.log(jqXHR);
-            /** @namespace jqXHR.responseJSON */
-            const errorJson = jqXHR.responseJSON;
-            alert(
-                jqXHR.status + ': ' + jqXHR.statusText + '\n' +
-                'error type: ' + errorJson.errorType + '\ndetails: ' + errorJson.errorMessage
-            );
-        }
+    document.getElementById('addDiceTableRequest').addEventListener('click', () =>
+        addDiceTableRequest().domElements.input.focus()
     );
-}
+    document.getElementById('addStatsRequest').addEventListener('click', () =>
+        addStatsRequest().domElements.low.focus()
+    );
+    document.querySelectorAll('.example').forEach(button => {
+        button.addEventListener('click', () => {
+            button.closest('details').open = false;
+            getExampleDiceTable(button.dataset.build);
+        });
+    });
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
 
-const isLockedKey = "isLocked"
-function lockForm(formJQuery) {
-    formJQuery.data(isLockedKey, true);
-    formJQuery.children().css('background-color', 'grey');
-}
+    addDiceTableRequest();
+    addStatsRequest();
+    render();
 
-function unlockForm(formJQuery) {
-    formJQuery.data(isLockedKey, false);
-    formJQuery.children().removeAttr('style');
-}
-
-function hideTableForm(idStr) {
-    const theForm = $('#' + idStr);
-    unlockForm(theForm);
-    theForm.hide();
-    theForm.data('tableObj', null);
-    theForm[0].reset();
-    const hiddenForms = $('#tableRequestArea').data('hiddenForms');
-    hiddenForms.push(idStr);
-    hiddenForms.sort();
-    plotCurrentTables();
-    resetStatsTable();
-    clearRollResults(theForm);
-    assignRollers();
-}
-
-function hideStatsForm(idStr) {
-    const theForm = $('#' + idStr);
-    theForm.hide();
-    theForm[0].reset();
-    const hiddenForms = $('#statsRequestArea').data('hiddenForms');
-    hiddenForms.push(idStr);
-    hiddenForms.sort();
-    removeStatsTraces(idStr);
-    $('#rowFor-' + idStr).hide();
-}
-
-function showHiddenForm(requestAreaJQuery) {
-    const hiddenTables = requestAreaJQuery.data('hiddenForms');
-    if (hiddenTables.length > 0) {
-        const idStr = hiddenTables.shift();
-        $('#' + idStr).show();
-        return idStr;
+    function addDiceTableRequest() {
+        const form = cloneTemplate('diceTableRequestTemplate');
+        const diceTableRequest = {
+            domElements: {
+                form,
+                input: form.elements.buildString,
+                submit: form.querySelector('[type=submit]'),
+                error: form.querySelector('.diceTableRequestError'),
+                swatch: form.querySelector('.swatch'),
+            },
+            isPending: false,
+            diceTable: null,
+            roller: null,
+            rollHistory: [],
+        };
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            getDiceTable(diceTableRequest);
+        });
+        form.querySelector('.remove').addEventListener('click', () => removeDiceTableRequest(diceTableRequest));
+        diceTableRequests.push(diceTableRequest);
+        diceTableRequestList.append(form);
+        return diceTableRequest;
     }
-    return null;
-}
 
-function plotCurrentTables() {
-    const markersCutOff = 100;
+    function removeDiceTableRequest(diceTableRequest) {
+        diceTableRequests.splice(diceTableRequests.indexOf(diceTableRequest), 1);
+        diceTableRequest.domElements.form.remove();
+        if (diceTableRequests.length === 0) {
+            addDiceTableRequest();
+        }
+        render();
+    }
 
-    const plotData = [];
-    $('.tableRequest').each(function () {
-        const tableObj = $('#' + this.id).data('tableObj');
-        if (tableObj !== null) {
-            const mode = (tableObj.data.x.length <= markersCutOff) ? "lines+markers" : "lines";
-            const datum = {
-                x: tableObj.data.x,
-                y: tableObj.data.y,
-                name: getDiceListString(tableObj.name),
-                mode: mode
+    function getExampleDiceTable(buildString) {
+        const diceTableRequest = diceTableRequests.find(isBlank) || addDiceTableRequest();
+        diceTableRequest.domElements.input.value = buildString;
+        getDiceTable(diceTableRequest);
+    }
+
+    function isBlank(diceTableRequest) {
+        return diceTableRequest.diceTable === null
+            && !diceTableRequest.isPending
+            && diceTableRequest.domElements.input.value.trim() === '';
+    }
+
+    async function getDiceTable(diceTableRequest) {
+        if (diceTableRequest.isPending) {
+            return;
+        }
+        setPending(diceTableRequest, true);
+        showError(diceTableRequest, '');
+        try {
+            const diceTable = await fetchDiceTable(diceTableRequest.domElements.input.value);
+            diceTableRequest.diceTable = diceTable;
+            diceTableRequest.roller = new AliasTableRoller(diceTable.roller.height, diceTable.roller.aliases);
+            diceTableRequest.rollHistory = [];
+            render();
+        } catch (error) {
+            showError(diceTableRequest, error.message);
+        } finally {
+            setPending(diceTableRequest, false);
+        }
+    }
+
+    function setPending(diceTableRequest, isPending) {
+        diceTableRequest.isPending = isPending;
+        diceTableRequest.domElements.submit.disabled = isPending;
+        diceTableRequest.domElements.form.setAttribute('aria-busy', String(isPending));
+    }
+
+    function showError(diceTableRequest, message) {
+        diceTableRequest.domElements.error.textContent = message;
+        diceTableRequest.domElements.error.hidden = message === '';
+    }
+
+    function addStatsRequest() {
+        const form = cloneTemplate('statsRequestTemplate');
+        const statsRequest = {
+            domElements: {form, low: form.elements.low, high: form.elements.high},
+            submittedRollRange: null,
+        };
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            const low = parseInt(statsRequest.domElements.low.value, 10);
+            const high = parseInt(statsRequest.domElements.high.value, 10);
+            statsRequest.submittedRollRange = [Math.min(low, high), Math.max(low, high)];
+            render();
+        });
+        form.querySelector('.remove').addEventListener('click', () => removeStatsRequest(statsRequest));
+        statsRequests.push(statsRequest);
+        statsRequestList.append(form);
+        limitInputsToLoadedRolls(statsRequest, getLoadedDiceTableRequests());
+        fillBlankInputsWithLoadedRolls(statsRequest, getLoadedDiceTableRequests());
+        return statsRequest;
+    }
+
+    function removeStatsRequest(statsRequest) {
+        statsRequests.splice(statsRequests.indexOf(statsRequest), 1);
+        statsRequest.domElements.form.remove();
+        if (statsRequests.length === 0) {
+            addStatsRequest();
+        }
+        render();
+    }
+
+    function limitInputsToLoadedRolls(statsRequest, loadedDiceTableRequests) {
+        const inputs = [statsRequest.domElements.low, statsRequest.domElements.high];
+        if (loadedDiceTableRequests.length === 0) {
+            inputs.forEach(input => {
+                input.removeAttribute('min');
+                input.removeAttribute('max');
+            });
+            return;
+        }
+        const [lowest, highest] = getLowestAndHighestRolls(loadedDiceTableRequests);
+        inputs.forEach(input => {
+            input.min = lowest;
+            input.max = highest;
+        });
+    }
+
+    function fillBlankInputsWithLoadedRolls(statsRequest, loadedDiceTableRequests) {
+        if (loadedDiceTableRequests.length === 0) {
+            return;
+        }
+        const {low, high} = statsRequest.domElements;
+        const [lowest, highest] = getLowestAndHighestRolls(loadedDiceTableRequests);
+        if (low.value === '') {
+            low.value = lowest;
+        }
+        if (high.value === '') {
+            high.value = highest;
+        }
+    }
+
+    function getLoadedDiceTableRequests() {
+        return diceTableRequests.filter(diceTableRequest => diceTableRequest.diceTable !== null);
+    }
+
+    function render() {
+        const loadedDiceTableRequests = getLoadedDiceTableRequests();
+        const submittedStatsResults = getSubmittedStatsResults(loadedDiceTableRequests);
+
+        diceTableRequests.forEach(diceTableRequest => {
+            const loadedIndex = loadedDiceTableRequests.indexOf(diceTableRequest);
+            const swatch = diceTableRequest.domElements.swatch;
+            swatch.classList.toggle('active', loadedIndex !== -1);
+            swatch.style.background = loadedIndex === -1 ? '' : getTraceColor(loadedIndex);
+        });
+        statsRequests.forEach(statsRequest => {
+            limitInputsToLoadedRolls(statsRequest, loadedDiceTableRequests);
+            fillBlankInputsWithLoadedRolls(statsRequest, loadedDiceTableRequests);
+        });
+
+        renderPlot(loadedDiceTableRequests, submittedStatsResults);
+        renderStatsTable(loadedDiceTableRequests, submittedStatsResults);
+        renderRoller(loadedDiceTableRequests);
+    }
+
+    function getSubmittedStatsResults(loadedDiceTableRequests) {
+        const submittedStatsRequests = statsRequests.filter(({submittedRollRange}) => submittedRollRange !== null);
+        return submittedStatsRequests.map(statsRequest => {
+            const [low, high] = statsRequest.submittedRollRange;
+            const rolls = getEveryRollFrom(low, high);
+            return {
+                low,
+                high,
+                colorShiftIndex: statsRequests.indexOf(statsRequest),
+                statsPerLoadedDiceTable: loadedDiceTableRequests.map(({diceTable}) =>
+                    getStats(diceTable.forSciNum, rolls)
+                ),
             };
-            plotData.push(datum);
+        });
+    }
+
+    function renderPlot(loadedDiceTableRequests, submittedStatsResults) {
+        const plotDiv = document.getElementById('plotDiv');
+        document.getElementById('plotEmpty').hidden = loadedDiceTableRequests.length > 0;
+        if (typeof Plotly === 'undefined') {
+            plotDiv.textContent = 'The plotting library did not load, so the plot is unavailable.';
+            return;
+        }
+
+        const traces = loadedDiceTableRequests.map((diceTableRequest, loadedIndex) => ({
+            x: diceTableRequest.diceTable.data.x,
+            y: diceTableRequest.diceTable.data.y,
+            name: getDiceList(diceTableRequest.diceTable.name),
+            mode: diceTableRequest.diceTable.data.x.length <= 100 ? 'lines+markers' : 'lines',
+            line: {color: getTraceColor(loadedIndex)},
+            marker: {color: getTraceColor(loadedIndex)},
+        }));
+        submittedStatsResults.forEach(({low, high, colorShiftIndex, statsPerLoadedDiceTable}) => {
+            loadedDiceTableRequests.forEach((diceTableRequest, loadedIndex) => {
+                const diceList = getDiceList(diceTableRequest.diceTable.name);
+                const {pctChance} = statsPerLoadedDiceTable[loadedIndex];
+                traces.push({
+                    ...getStatsFillTrace(low, high, diceTableRequest.diceTable.data),
+                    type: 'scatter',
+                    mode: 'none',
+                    fill: 'tozeroy',
+                    fillcolor: getStatsFillColor(loadedIndex, colorShiftIndex),
+                    hoverinfo: 'skip',
+                    name: getStatsTraceName(diceList, low, high, pctChance),
+                });
+            });
+        });
+
+        const style = getComputedStyle(document.documentElement);
+        const textColor = style.getPropertyValue('--text').trim();
+        const gridColor = style.getPropertyValue('--border').trim();
+        const axis = {gridcolor: gridColor, zerolinecolor: gridColor, linecolor: gridColor};
+        const legendAbovePlot = {orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom'};
+        const layout = {
+            margin: {t: 10, r: 10, b: 10, l: 60},
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: {family: style.getPropertyValue('--font').trim(), color: textColor},
+            modebar: {
+                bgcolor: 'rgba(0,0,0,0)',
+                color: style.getPropertyValue('--muted').trim(),
+                activecolor: style.getPropertyValue('--accent').trim(),
+            },
+            showlegend: true,
+            legend: legendAbovePlot,
+            xaxis: {...axis, title: {text: 'roll'}, automargin: true},
+            yaxis: {...axis, title: {text: '% chance'}, rangemode: 'tozero', automargin: true},
+        };
+        const toolbarWouldCoverLegend = window.matchMedia('(max-width: 700px)').matches;
+        const config = {
+            responsive: true,
+            displaylogo: false,
+            showSendToCloud: false,
+            displayModeBar: !toolbarWouldCoverLegend,
+        };
+        Plotly.react(plotDiv, traces, layout, config);
+    }
+
+    function renderStatsTable(loadedDiceTableRequests, submittedStatsResults) {
+        const table = document.getElementById('statsTable');
+        document.getElementById('statsEmpty').hidden = loadedDiceTableRequests.length > 0;
+        table.hidden = loadedDiceTableRequests.length === 0;
+
+        const head = document.createElement('tr');
+        head.append(makeElement('th', ''));
+        loadedDiceTableRequests.forEach((diceTableRequest, loadedIndex) => {
+            const cell = makeElement('th', getDiceList(diceTableRequest.diceTable.name));
+            cell.scope = 'col';
+            cell.style.color = getTraceColor(loadedIndex);
+            cell.title = diceTableRequest.diceTable.diceStr;
+            head.append(cell);
+        });
+
+        const rows = [
+            ['Range', diceTable => getRangeLabel(diceTable.range[0], diceTable.range[1])],
+            ['Mean', diceTable => String(diceTable.mean)],
+            ['Std dev', diceTable => String(diceTable.stddev)],
+        ].map(([label, getValue]) => {
+            const row = document.createElement('tr');
+            row.append(makeElement('th', label));
+            loadedDiceTableRequests.forEach(({diceTable}) => row.append(makeElement('td', getValue(diceTable))));
+            return row;
+        });
+
+        submittedStatsResults.forEach(({low, high, statsPerLoadedDiceTable}) => {
+            const row = document.createElement('tr');
+            row.append(makeElement('th', getRangeLabel(low, high)));
+            statsPerLoadedDiceTable.forEach(stat => {
+                const cell = makeElement('td', stat.pctChance + '%');
+                const oneInChance = makeElement('span', '1 in ' + stat.oneInChance);
+                oneInChance.className = 'oneInChance';
+                cell.append(oneInChance);
+                cell.title = `${stat.occurrences} of ${stat.total} combinations`;
+                row.append(cell);
+            });
+            rows.push(row);
+        });
+
+        table.tHead.replaceChildren(head);
+        table.tBodies[0].replaceChildren(...rows);
+    }
+
+    function renderRoller(loadedDiceTableRequests) {
+        document.getElementById('rollerEmpty').hidden = loadedDiceTableRequests.length > 0;
+        document.getElementById('rollerRows').replaceChildren(...loadedDiceTableRequests.map(makeRollerRow));
+    }
+
+    function makeRollerRow(diceTableRequest) {
+        const row = document.createElement('div');
+        row.className = 'rollerRow';
+
+        const diceList = makeElement('span', getDiceList(diceTableRequest.diceTable.name));
+        diceList.className = 'rollerDiceList';
+        const button = makeElement('button', 'Roll');
+        button.type = 'button';
+        button.className = 'secondary';
+        const latestRoll = makeElement('div', '');
+        latestRoll.className = 'latestRoll';
+        latestRoll.setAttribute('aria-live', 'polite');
+        const earlierRolls = makeElement('div', '');
+        earlierRolls.className = 'earlierRolls';
+
+        const showRolls = () => {
+            const [latest, ...earlier] = diceTableRequest.rollHistory;
+            latestRoll.textContent = latest ?? 'None';
+            earlierRolls.textContent = earlier.join(', ');
+        };
+        button.addEventListener('click', () => {
+            diceTableRequest.rollHistory.unshift(diceTableRequest.roller.roll());
+            showRolls();
+        });
+        showRolls();
+
+        row.append(diceList, button, latestRoll, earlierRolls);
+        return row;
+    }
+}
+
+async function fetchDiceTable(buildString) {
+    let response;
+    try {
+        // a plain-text body keeps this a "simple" cross-origin request (no preflight)
+        response = await fetch(getLambdaEndpoint(), {
+            method: 'POST',
+            body: JSON.stringify({buildString}),
+        });
+    } catch (error) {
+        throw new Error(`Could not reach the dice server at ${getLambdaEndpoint()}.`);
+    }
+    const body = await parseJsonOrNull(response);
+    if (!response.ok) {
+        if (body && body.errorMessage) {
+            throw new Error(body.errorType ? `${body.errorType}: ${body.errorMessage}` : body.errorMessage);
+        }
+        throw new Error(`The dice server answered ${response.status} ${response.statusText}.`);
+    }
+    if (body === null) {
+        throw new Error('The dice server sent a response that was not JSON.');
+    }
+    return body;
+}
+
+async function parseJsonOrNull(response) {
+    try {
+        return await response.json();
+    } catch (notJson) {
+        return null;
+    }
+}
+
+function getLowestAndHighestRolls(diceTableRequests) {
+    const lowest = Math.min(...diceTableRequests.map(({diceTable}) => diceTable.range[0]));
+    const highest = Math.max(...diceTableRequests.map(({diceTable}) => diceTable.range[1]));
+    return [lowest, highest];
+}
+
+function cloneTemplate(id) {
+    return document.getElementById(id).content.firstElementChild.cloneNode(true);
+}
+
+function makeElement(tag, text) {
+    const element = document.createElement(tag);
+    element.textContent = text;
+    return element;
+}
+
+const minimizedPanelsStorageKey = 'minimizedPanels';
+
+function setUpPanels() {
+    const minimized = loadMinimizedPanels();
+    document.querySelectorAll('.panel').forEach(panel => {
+        panel.querySelector('.panelToggle').addEventListener('click', () => {
+            setPanelMinimized(panel, !panel.classList.contains('minimized'));
+            saveMinimizedPanels();
+        });
+        if (minimized.includes(panel.id)) {
+            setPanelMinimized(panel, true);
         }
     });
-    const layout = {
-        margin: {t: 25},
-        showlegend: true,
-        legend: {x: 1, y: 0.5},
-        xaxis: {title: 'rolls'},
-        yaxis: {title: 'pct chance'}  // type: 'log'
-    };
-    const graphDiv = document.getElementById('plotter');
-    Plotly.newPlot(graphDiv, plotData, layout);
-    getRangesForStats();
 }
 
-function getRangesForStats() {
-    const data = document.getElementById('plotter').data;
-    let min = Infinity;
-    let max = -Infinity;
-    data.forEach(function (el) {
-        const xVals = el.x;
-        const elMin = Math.min.apply(null, xVals);
-        const elMax = Math.max.apply(null, xVals);
-        min = Math.min(min, elMin);
-        max = Math.max(max, elMax);
+function setPanelMinimized(panel, isMinimized) {
+    panel.classList.toggle('minimized', isMinimized);
+    panel.querySelector('.panelToggle').setAttribute('aria-expanded', String(!isMinimized));
+    const plot = panel.querySelector('.js-plotly-plot');
+    if (!isMinimized && plot !== null) {
+        refitPlotAfterReveal(plot);
+    }
+}
+
+function refitPlotAfterReveal(plot) {
+    Plotly.Plots.resize(plot);
+}
+
+function saveMinimizedPanels() {
+    const minimized = [...document.querySelectorAll('.panel.minimized')].map(panel => panel.id);
+    try {
+        localStorage.setItem(minimizedPanelsStorageKey, JSON.stringify(minimized));
+    } catch (storageUnavailable) {
+    }
+}
+
+function loadMinimizedPanels() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(minimizedPanelsStorageKey));
+        return Array.isArray(stored) ? stored : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function setUpMenus() {
+    const menus = [...document.querySelectorAll('details.menu')];
+    closeOtherMenusWhenOneOpens(menus);
+    closeMenusOnOutsideClick(menus);
+    closeMenusOnEscape(menus);
+}
+
+function closeOtherMenusWhenOneOpens(menus) {
+    menus.forEach(menu => menu.addEventListener('toggle', () => {
+        if (menu.open) {
+            menus.filter(other => other !== menu).forEach(other => {
+                other.open = false;
+            });
+        }
+    }));
+}
+
+function closeMenusOnOutsideClick(menus) {
+    document.addEventListener('click', event => {
+        menus.filter(menu => menu.open && !menu.contains(event.target)).forEach(menu => {
+            menu.open = false;
+        });
     });
-    if (min === Infinity || max === -Infinity) {
-        min = 0;
-        max = 0;
-    }
-    $('.statsInput').attr({'min': min, 'value': min, 'max': max});
 }
 
-// resetStatsTable
-function resetStatsTable() {
-    emptyStatsTable();
-
-    let colorIndex = 0;
-
-    const tableName = $('#tableName');
-    const tableRange = $('#tableRange');
-    const tableMean = $('#tableMean');
-    const tableStdDev = $('#tableStdDev');
-
-    $('.tableRequest').each(function () {
-        const tableObj = $(this).data('tableObj');
-        if (tableObj !== null) {
-            const forStatsTable = getTableObjStats(tableObj, colorIndex);
-            colorIndex++;
-            tableName.append(forStatsTable['tableName']);
-            tableRange.append(forStatsTable['tableRange']);
-            tableMean.append(forStatsTable['tableMean']);
-            tableStdDev.append(forStatsTable['tableStdDev']);
+function closeMenusOnEscape(menus) {
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') {
+            return;
         }
+        menus.filter(menu => menu.open).forEach(menu => {
+            menu.open = false;
+            menu.querySelector('summary').focus();
+        });
     });
-}
-
-function emptyStatsTable() {
-    const statsTable = $('#statsTable');
-    statsTable.find('tr:not(".keeper")').hide();
-    statsTable.find('td').remove();
-}
-
-function getTableObjStats(tableObj, index) {
-    const out = {};
-
-    const colors = [
-        '#1f77b4',  // muted blue  rgba(31,119,180, 1)
-        '#ff7f0e',  // safety orange  rgba(255,127,14, 1)
-        '#2ca02c',  // cooked asparagus green  rgba(44,160,44, 1)
-        '#d62728',  // brick red  rgba(214,39,40, 1)
-        '#9467bd',  // muted purple  rgba(148,103,189, 1)
-        '#8c564b',  // chestnut brown  rgba(140,86,75, 1)
-        '#e377c2',  // raspberry yogurt pink  rgba(227,119,194, 1)
-        '#7f7f7f',  // middle gray  rgba(127,127,127, 1)
-        '#bcbd22',  // curry yellow-green  rgba(188,189,34, 1)
-        '#17becf'  // blue-teal  rgba(23,190,207, 1)
-    ];
-    const color = colors[index % colors.length];
-    const name = getDiceListString(tableObj.name);
-    const tooltipText = "<span class='tooltiptext'>" + tableObj.diceStr.replace(/\n/g, '</br>') + "</span>";
-
-    out['tableName'] = "<td class='tooltip' style='color:" + color + "'>" + name + tooltipText + "</td>";
-    out['tableRange'] = "<td style='color:" + color + "'>" + tableObj.range[0] + ' to ' + tableObj.range[1] + '</td>';
-    out['tableMean'] = "<td style='color:" + color + "'>" + tableObj.mean + '</td>';
-    out['tableStdDev'] = "<td style='color:" + color + "'>" + tableObj.stddev + '</td>';
-    return out;
-}
-
-// assignRollers
-function assignRollers() {
-    $('.tableRequest').each(function () {
-            assignRoller($(this));
-        }
-    )
-}
-
-function assignRoller(tableRequestJQuery) {
-    const tableObj = tableRequestJQuery.data("tableObj");
-    const rollerButton = tableRequestJQuery.find('.roller');
-
-    rollerButton.off("click");
-
-    if (tableObj !== null) {
-        const rollerObject = new Roller(tableObj.roller.height, tableObj.roller.aliases);
-        const rollResults = tableRequestJQuery.data("rollResults");
-        rollerButton.click(function () {
-                const newRoll = rollerObject.roll();
-                rollResults.push(newRoll);
-                displayRollResults(tableRequestJQuery);
-            }
-        );
-    }
-}
-
-function displayRollResults(tableRequestJQuery) {
-    const rollResultsCopy = tableRequestJQuery.data('rollResults').slice();
-    let innerHTML = "None";
-    const firstNumber = rollResultsCopy.pop();
-    if (firstNumber !== undefined) {
-        innerHTML = firstNumber;
-    }
-    const addTollTipText = (rollResultsCopy.length > 0);
-    const toolTipStart = "<span class=\"tooltiptext numberList\">Previous<br>";
-    const toolTipEnd = "</span>";
-    if (addTollTipText) {
-        innerHTML += toolTipStart;
-    }
-    while (rollResultsCopy.length > 0) {
-        innerHTML += rollResultsCopy.pop() + "<br>";
-    }
-    if (addTollTipText) {
-        innerHTML += toolTipEnd;
-    }
-    tableRequestJQuery.find('.rollDisplay')[0].innerHTML = innerHTML;
-}
-
-function clearRollResults(tableRequestJQuery) {
-    tableRequestJQuery.data('rollResults', []);
-    displayRollResults(tableRequestJQuery);
-}
-
-// plotStats and helpers
-function plotStats(statsForm) {
-    removeStatsTraces(statsForm.id);
-    const graphDiv = document.getElementById('plotter');
-
-    const queryArr = getRange(statsForm.left.value, statsForm.right.value);
-
-    const statsData = [];
-    const tableEntries = [];
-    let nonNullDataIndex = 0;
-
-    $('.tableRequest').each(function () {
-        const tableObj = $('#' + this.id).data('tableObj');
-        if (tableObj !== null) {
-            const statsInfo = getStats(tableObj.forSciNum, queryArr);
-            statsInfo['header'] = getDiceListString(tableObj.name);
-
-            const traceDatum = statsGraphVals(queryArr, tableObj);
-            traceDatum['name'] = statsGraphName(tableObj, statsInfo.pctChance, queryArr);
-
-            traceDatum['fillcolor'] = statsGraphColor(nonNullDataIndex, statsForm.id);
-            traceDatum['statsGroup'] = statsForm.id;
-            traceDatum['legendgroup'] = tableObj.diceStr;
-            nonNullDataIndex++;
-
-            statsData.push(traceDatum);
-            tableEntries.push(statsInfo);
-
-        }
-    });
-    Plotly.addTraces(graphDiv, statsData);
-    return tableEntries;
-}
-
-function removeStatsTraces(statsFormId) {
-    const graphDiv = document.getElementById('plotter');
-    const toRemove = [];
-    for (let i = 0; i < graphDiv.data.length; i++) {
-        if (graphDiv.data[i].statsGroup === statsFormId) {
-            toRemove.push(i);
-        }
-    }
-    Plotly.deleteTraces(graphDiv, toRemove);
-}
-
-function getRange(left, right) {
-    const leftInt = parseInt(left);
-    const rightInt = parseInt(right);
-    const out = [];
-    let stop, start;
-    if (leftInt < rightInt) {
-        start = leftInt;
-        stop = rightInt;
-    } else {
-        start = rightInt;
-        stop = leftInt;
-    }
-    for (let i = start; i <= stop; i++) {
-        out.push(i);
-    }
-    return out;
-}
-
-function statsGraphVals(queryArr, tableObj) {
-    const start = Math.max(queryArr[0], tableObj.range[0]);
-    const stop = Math.min(queryArr[queryArr.length - 1], tableObj.range[1]);
-    const startIndex = tableObj.data.x.indexOf(start);
-    const stopIndex = tableObj.data.x.indexOf(stop);
-    if (startIndex === -1 || stopIndex === -1) {
-        return {x: [], y: [], type: 'scatter', mode: 'none', fill: 'tozeroy', hoverinfo: 'skip'};
-    }
-    const xVals = tableObj.data.x.slice(startIndex, stopIndex + 1);
-    const yVals = tableObj.data.y.slice(startIndex, stopIndex + 1);
-    if (start > tableObj.range[0]) {
-        const beforeVal = 0.48 * tableObj.data.y[startIndex - 1] + 0.52 * tableObj.data.y[startIndex];
-        xVals.unshift(start - 0.48);
-        yVals.unshift(beforeVal);
-    }
-    if (stop < tableObj.range[1]) {
-        const afterVal = 0.48 * tableObj.data.y[stopIndex + 1] + 0.52 * tableObj.data.y[stopIndex];
-        xVals.push(stop + 0.48);
-        yVals.push(afterVal);
-    }
-    return {x: xVals, y: yVals, type: 'scatter', mode: 'none', fill: 'tozeroy', hoverinfo: 'skip'};
-}
-
-function statsGraphName(tableObj, pctString, queryArr) {
-    const tableName = getDiceListString(tableObj.name);
-    const query = (queryArr.length === 1) ? queryArr[0] : queryArr[0] + 'to' + queryArr[queryArr.length - 1];
-    return tableName + ': [' + query + ']: ' + pctString + '%';
-}
-
-function statsGraphColor(matchGraphIndex, statsFormId) {
-    const colorObjs = [
-        {'r': 31, 'g': 119, 'b': 180, 'a': 0.5},
-        {'r': 255, 'g': 127, 'b': 14, 'a': 0.5},
-        {'r': 44, 'g': 160, 'b': 44, 'a': 0.5},
-        {'r': 214, 'g': 39, 'b': 40, 'a': 0.5},
-        {'r': 148, 'g': 103, 'b': 189, 'a': 0.5},
-        {'r': 140, 'g': 86, 'b': 75, 'a': 0.5},
-        {'r': 227, 'g': 119, 'b': 194, 'a': 0.5},
-        {'r': 127, 'g': 127, 'b': 127, 'a': 0.5},
-        {'r': 188, 'g': 189, 'b': 34, 'a': 0.5},
-        {'r': 23, 'g': 190, 'b': 207, 'a': 0.5}
-    ];
-    const rgbaObj = colorObjs[matchGraphIndex];
-    const modValues = [
-        [0, -10, 10], [10, 10, 10], [-10, -10, -10], [-10, 10, -10], [10, -10, 10],
-        [-10, -10, 10], [10, -10, -10], [-10, 10, 10], [10, 10, -10], [10, 0, -10]
-    ];
-    const mod = modValues[statsFormId.slice(-1)];
-
-    return 'rgba(' + (rgbaObj.r + mod[0]) + ',' + (rgbaObj.g + mod[1]) + ',' + (rgbaObj.b + mod[2]) + ',0.5)';
-}
-
-// showStatsRow
-function showStatsRow(statsForm, tableEntries) {
-    const rowForStats = $('#rowFor-' + statsForm.id);
-    rowForStats[0].innerHTML = getTableRow(statsForm, tableEntries);
-    rowForStats.show();
-}
-
-function getTableRow(statsForm, tableEntries) {
-    const left = statsForm.left.value;
-    const right = statsForm.right.value;
-    const title = (parseInt(left) < parseInt(right)) ? left + ' to ' + right : right + ' to ' + left;
-    let tableRow = "<th>" + title + "</th>";
-    for (let i = 0; i < tableEntries.length; i++) {
-        const entry = tableEntries[i];
-        tableRow += "<td class='tooltip'>" + entry.pctChance + ' %' + getToolTipText(entry) + '</td>';
-    }
-    return tableRow;
-}
-
-function getToolTipText(statsObj) {
-    const start = "<span class='tooltiptext'>";
-    const end = '</span>';
-    return (
-        start + 'occurrences: ' + statsObj.occurrences +
-        '</br>out of total: ' + statsObj.total +
-        '</br>a one in ' + statsObj.oneInChance + ' chance' + end
-    );
-}
-
-function getDiceListString(diceTableName) {
-    return diceTableName.slice("<DiceTable containing ".length, -1);
 }
