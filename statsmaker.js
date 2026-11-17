@@ -1,3 +1,14 @@
+// Every integer roll from low to high inclusive, in either order: getRollRange(3, 1) is [1, 2, 3].
+function getRollRange(low, high) {
+    const start = Math.min(low, high);
+    const stop = Math.max(low, high);
+    const rolls = [];
+    for (let roll = start; roll <= stop; roll++) {
+        rolls.push(roll);
+    }
+    return rolls;
+}
+
 function getStats(rollMantissaExponentObjects, rollsQueryArray) {
     const sciNumObj = createSciNumObj(rollMantissaExponentObjects);
     return getStatsFromSciNumObj(sciNumObj, rollsQueryArray)
@@ -25,7 +36,7 @@ function getStatsFromSciNumObj(sciNumObj, rollsQueryArray) {
 }
 
 function getSciNumValue(obj, key) {
-    return obj.hasOwnProperty(key) ? obj[key] : new SciNum(0, 0);
+    return Object.hasOwn(obj, key) ? obj[key] : new SciNum(0, 0);
 }
 
 function createStatsObj(total, sciNumArr) {

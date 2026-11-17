@@ -1,244 +1,563 @@
-section {
-    border: 4px solid grey;
-    border-radius: 15px;
-    box-shadow: 5px 5px 5px grey;
-    padding: 20px;
-    margin: 10px;
+/* ---------- theme ---------- */
+
+:root {
+    color-scheme: light dark;
+
+    --bg: #f4f2ee;
+    --surface: #ffffff;
+    --surface-2: #f6f5f1;
+    --text: #1f1d1a;
+    --muted: #6b665e;
+    --border: #dedad3;
+    --accent: #2e7d4f;
+    --accent-hover: #256a42;
+    --accent-text: #ffffff;
+    --danger: #b3261e;
+    --roll-bg: #ead6b2;
+    --roll-text: #3b2f1c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 14px rgba(0, 0, 0, 0.05);
+    --menu-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+
+    --radius: 12px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-section.minimized {
-    padding-top: 8px;
-    padding-bottom: 8px;
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #151412;
+        --surface: #1e1d1a;
+        --surface-2: #272622;
+        --text: #ece9e3;
+        --muted: #a39e94;
+        --border: #3a3833;
+        --accent: #55b884;
+        --accent-hover: #6ac795;
+        --accent-text: #0c1d13;
+        --danger: #f2867e;
+        --roll-bg: #5a4a2e;
+        --roll-text: #f6e7c8;
+        --shadow: none;
+        --menu-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+    }
 }
 
-section.minimized > .panelBody {
+/* ---------- base ---------- */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 var(--font);
+}
+
+main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 16px;
+    display: grid;
+    /* minmax(0, ...) so a wide child (like the stats table) scrolls in its own box
+       instead of stretching every panel past the screen edge */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+}
+
+a {
+    color: var(--accent);
+}
+
+code {
+    font-family: var(--mono);
+    font-size: 0.9em;
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+}
+
+input[type=text],
+input[type=number] {
+    min-width: 0;
+    padding: 7px 10px;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+input[type=text] {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+}
+
+.primary {
+    padding: 7px 14px;
+    font-weight: 600;
+    color: var(--accent-text);
+    background: var(--accent);
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.primary:hover {
+    background: var(--accent-hover);
+}
+
+.primary:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+.secondary {
+    padding: 6px 12px;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.secondary:hover {
+    background: var(--surface-2);
+}
+
+.iconButton {
+    width: 34px;
+    height: 34px;
+    font-size: 1.3rem;
+    line-height: 1;
+    color: var(--muted);
+    background: none;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.iconButton:hover {
+    color: var(--text);
+    background: var(--surface-2);
+}
+
+.emptyNote {
+    margin: 0;
+    color: var(--muted);
+}
+
+/* ---------- minimizable panels ---------- */
+
+.panel {
+    padding: 10px 20px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.panel.minimized {
+    padding-bottom: 10px;
+}
+
+.panel.minimized > .panelBody {
     display: none;
 }
 
 .panelHeader {
     margin: 0;
-    font-size: 1.2em;
+    font-size: 1.05rem;
 }
 
 .panelToggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    padding: 0 0 10px 0;
-    border: none;
-    background: none;
-    font: inherit;
-    font-weight: bold;
+    padding: 4px 0;
+    font-weight: 600;
     text-align: left;
+    background: none;
+    border: 0;
     cursor: pointer;
 }
 
-section.minimized .panelToggle {
-    padding-bottom: 0;
-}
-
+/* chevron: points down when open, right when minimized */
 .panelToggle::before {
-    content: "\25BC";
-    display: inline-block;
-    width: 1.4em;
+    content: "";
+    width: 8px;
+    height: 8px;
+    margin: 0 2px 4px 2px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.15s;
 }
 
 .panelToggle[aria-expanded="false"]::before {
-    content: "\25B6";
+    margin-bottom: 0;
+    transform: rotate(-45deg);
 }
 
-.statsBody {
+.panelBody {
+    margin-top: 12px;
+}
+
+/* ---------- intro ---------- */
+
+.introContent {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 24px;
+    align-items: center;
+}
+
+.introText h1 {
+    margin: 0 0 8px;
+    font-size: clamp(1.6rem, 2.5vw + 1rem, 2.4rem);
+    line-height: 1.15;
+}
+
+.introText p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.introImage {
+    display: block;
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+/* ---------- help menus (click to open, so they work on touch screens) ---------- */
+
+.menuBar {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 20px;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.menu {
+    position: relative;
+}
+
+.menu > summary,
+.menuLink {
+    display: block;
+    padding: 6px 12px;
+    font-weight: 500;
+    color: var(--text);
+    text-decoration: none;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.menu > summary {
+    list-style: none;
+}
+
+.menu > summary::-webkit-details-marker {
+    display: none;
+}
+
+.menu > summary::after {
+    content: "\25BE";
+    margin-left: 6px;
+    color: var(--muted);
+}
+
+.menu[open] > summary {
+    border-color: var(--accent);
+}
+
+.menuLink:hover,
+.menu > summary:hover {
+    border-color: var(--muted);
+}
+
+.menuPanel {
+    position: absolute;
+    z-index: 10;
+    top: calc(100% + 6px);
+    left: 0;
+    width: min(520px, calc(100vw - 32px));
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--menu-shadow);
+}
+
+.example {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.example:hover {
+    background: var(--surface-2);
+}
+
+.example code {
+    display: block;
+    font-weight: 600;
+}
+
+.example span {
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+.prose p {
+    margin: 6px 8px 12px;
+}
+
+/* long dice strings would otherwise run out of the menu on narrow screens */
+.menuPanel code {
+    overflow-wrap: anywhere;
+}
+
+.prose a {
+    display: block;
+    padding: 4px 8px;
+}
+
+/* ---------- inputs ---------- */
+
+.collection {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* the plot color of this collection; dashed outline until it has been calculated */
+.swatch {
+    width: 14px;
+    height: 14px;
+    border: 2px dashed var(--border);
+    border-radius: 50%;
+}
+
+.swatch.active {
+    border: 0;
+}
+
+.rowError {
+    grid-column: 2 / -1;
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--danger);
+}
+
+/* ---------- plot ---------- */
+
+#plotter {
+    width: 100%;
+    height: 440px;
+}
+
+#plotEmpty + #plotter {
+    margin-top: 8px;
+}
+
+/* ---------- stats ---------- */
+
+.range {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.range label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+}
+
+.range input {
+    width: 7em;
+}
+
+#statsEmpty {
+    margin-top: 12px;
+}
+
+.tableScroll {
+    margin-top: 12px;
+    overflow-x: auto;
+}
+
+#statsTable {
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+#statsTable th,
+#statsTable td {
+    padding: 8px 14px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+}
+
+#statsTable thead th {
+    font-weight: 600;
+    border-bottom-width: 2px;
+}
+
+#statsTable tbody th {
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.statDetail {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+/* ---------- roller ---------- */
+
+/* one grid for all rows, so every column fits its widest entry */
+#rollerArea {
+    display: grid;
+    grid-template-columns: max-content max-content max-content minmax(0, 1fr);
+    align-items: baseline;
+    gap: 6px 10px;
 }
 
 .rollerRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 5px;
+    display: contents;
+}
+
+.rollerName {
+    font-weight: 500;
 }
 
 .rollDisplay {
     min-width: 3em;
+    padding: 3px 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     text-align: center;
+    color: var(--roll-text);
+    background: var(--roll-bg);
+    border-radius: 8px;
 }
 
-#rollerEmpty {
-    margin: 0;
-    color: #666;
+/* padding keeps the scrollbar below the numbers instead of over them */
+.rollHistory {
+    padding-bottom: 14px;
+    overflow-x: auto;
+    white-space: nowrap;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
 }
 
-.tableRequest {
-    width: 100%;
-    display: flex;
-}
+/* ---------- small screens ---------- */
 
-input[type=text] {
-    flex-grow: 1;
-    padding: 5px 5px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-}
+@media (max-width: 700px) {
+    main {
+        padding: 12px;
+        gap: 12px;
+    }
 
-#plotter {
-    width: 100%;
-    height: 400px;
-}
+    .panel {
+        padding: 8px 14px 16px;
+    }
 
-table, td, th {
-    border: 1px solid #ddd;
-    text-align: left;
-}
+    /* Safari on iPhone zooms the page into any input with text under 16px */
+    input[type=text],
+    input[type=number] {
+        font-size: 16px;
+    }
 
-table {
-    border-collapse: collapse;
-}
+    /* finger-sized remove buttons */
+    .iconButton {
+        width: 44px;
+        height: 44px;
+    }
 
-th, td {
-    padding: 15px;
-}
+    .introContent {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
 
-tr:nth-child(even) {
-    background-color: #f2f2f2
-}
+    .introImage {
+        height: 140px;
+    }
 
-.tooltip .tooltiptext {
-    visibility: hidden;
-    background-color: grey;
-    color: #fff;
-    text-align: center;
-    border-radius: 6px;
-    padding: 5px 10px;
+    /* menus open full width under the menu bar instead of under their button */
+    .menu {
+        position: static;
+    }
 
-    /* Position the tooltip */
-    position: absolute;
-    z-index: 1;
-}
-
-.tooltip:hover .tooltiptext {
-    visibility: visible;
-}
-
-.rollDisplay {
-    padding: 5px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    display: inline-block;
-    background-color: burlywood;
-    height: content-box;
-}
-.numberList {
-    overflow-y: scroll;
-    max-height: 200px;
-}
-/* Style The Dropdown Button */
-.dropbtn {
-    background-color: #4CAF50;
-    color: white;
-    padding: 5px;
-    /*font-size: 16px;*/
-    border: none;
-    cursor: pointer;
-}
-
-/* The container <div> - needed to position the dropdown content */
-.dropdown {
-    position: relative;
-    display: inline-block;
-}
-
-/* Dropdown Content (Hidden by Default) */
-.dropdown-content {
-    display: none;
-    position: absolute;
-    background-color: #f9f9f9;
-    width: 500px;
-    max-width: 40vw;
-    box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
-    z-index: 1;
-}
-
-@media only screen and (max-width: 1100px) {
-    .to-the-right {
+    .menuPanel {
         right: 0;
+        width: auto;
+    }
+
+    .collection {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .collection input {
+        grid-column: 2 / -1;
+    }
+
+    .collection .primary {
+        grid-column: 2;
+        justify-self: start;
+    }
+
+    #plotter {
+        height: 400px;
+    }
+
+    /* narrow enough that "From [ ] to [ ]" stays on one line */
+    .range input {
+        width: 5em;
+    }
+
+    #rollerArea {
+        grid-template-columns: max-content max-content minmax(0, 1fr);
+    }
+
+    /* name on its own line, then roll / result / history */
+    .rollerName {
+        grid-column: 1 / -1;
+        margin-top: 4px;
     }
 }
-
-/* Show the dropdown menu on hover */
-.dropdown:hover .dropdown-content {
-    display: block;
-}
-
-/* Links inside the dropdown */
-
-.dropdown-content > * {
-    padding: 5px 5px 5px 5px;
-    display: block;
-    text-align: left;
-    border: none;
-}
-
-.dropdown-content p, .dropdown-content a {
-    padding: 10px;
-}
-
-.dropdown-content .exampleClickable {
-    color: black;
-    text-decoration: none;
-    background-color: #f9f9f9;
-}
-
-/* Change color of dropdown links on hover */
-.dropdown-content .exampleClickable:hover {
-    background-color: #f1f1f1
-}
-
-
-/* Change the background color of the dropdown button when the dropdown content is shown */
-.dropdown:hover .dropbtn {
-    background-color: #3e8e41;
-}
-
-#title-area {
-    display: flex;
-}
-
-#title-area > div {
-    padding: 10px;
-    display: inline;
-    background-color: #dddddd;
-    /*flex-grow: 1;*/
-}
-
-#title-text-box {
-    width: 30%;
-}
-
-#title-image-box {
-    width: 70%;
-}
-
-#dice-bag {
-    width: auto;
-    height: 100%;
-    max-width: 100%;
-    object-fit: cover;
-}
-
-
-#starter {
-    list-style-type: none;
-    padding: 5px 5px 5px 200px;
-}
-
-#starter li {
-    display: inline;
-    padding: 10px;
-
-}
-
-.big-line {
-    alignment: center;
-}
-
