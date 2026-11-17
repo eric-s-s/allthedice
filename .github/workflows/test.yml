@@ -11,8 +11,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      # actions are pinned to full commit SHAs so a moved tag can't change what runs;
-      # the comment is the release the SHA belongs to
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
