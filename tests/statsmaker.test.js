@@ -3,10 +3,10 @@ const assert = require('node:assert');
 const {loadScripts} = require('./load.js');
 
 const {
-    SciNum, getStats, createSciNumObj, getStatsFromSciNumObj, getSciNumValue, createStatsObj, getRollRange,
+    SciNum, getStats, createSciNumObj, getStatsFromSciNumObj, getSciNumValue, createStatsObj, getEveryRollFrom,
 } = loadScripts(
     ['scinum.js', 'statsmaker.js'],
-    ['SciNum', 'getStats', 'createSciNumObj', 'getStatsFromSciNumObj', 'getSciNumValue', 'createStatsObj', 'getRollRange'],
+    ['SciNum', 'getStats', 'createSciNumObj', 'getStatsFromSciNumObj', 'getSciNumValue', 'createStatsObj', 'getEveryRollFrom'],
 );
 
 test("createStatsObj positive poswers commaed", () => {
@@ -204,12 +204,12 @@ test("getStats properly combines two functions", () => {
 });
 
 
-test("getRollRange is every integer from low to high inclusive", () => {
-    assert.deepStrictEqual(getRollRange(1, 3), [1, 2, 3]);
-    assert.deepStrictEqual(getRollRange(-2, 1), [-2, -1, 0, 1]);
-    assert.deepStrictEqual(getRollRange(5, 5), [5]);
+test("getEveryRollFrom is every integer from low to high inclusive", () => {
+    assert.deepStrictEqual(getEveryRollFrom(1, 3), [1, 2, 3]);
+    assert.deepStrictEqual(getEveryRollFrom(-2, 1), [-2, -1, 0, 1]);
+    assert.deepStrictEqual(getEveryRollFrom(5, 5), [5]);
 });
 
-test("getRollRange accepts its ends in either order", () => {
-    assert.deepStrictEqual(getRollRange(3, 1), [1, 2, 3]);
+test("getEveryRollFrom accepts its ends in either order", () => {
+    assert.deepStrictEqual(getEveryRollFrom(3, 1), [1, 2, 3]);
 });

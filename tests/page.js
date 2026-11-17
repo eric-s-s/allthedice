@@ -45,23 +45,23 @@ async function openPage({lambda = fakeLambda({}), hasPlotly = true, isNarrowScre
 
 function pageActions(window) {
     const document = window.document;
-    const getRequestRows = () => [...document.querySelectorAll('#diceTableRequestList form')];
-    const getRangeRows = () => [...document.querySelectorAll('#rangeList form')];
+    const getDiceTableRequestRows = () => [...document.querySelectorAll('#diceTableRequestList form')];
+    const getStatsRequestRows = () => [...document.querySelectorAll('#statsRequestList form')];
 
-    async function submitRequest(row, buildString) {
+    async function submitDiceTableRequest(row, buildString) {
         row.elements.buildString.value = buildString;
         row.querySelector('[type=submit]').click();
         await settle();
     }
 
-    async function submitRange(row, low, high) {
+    async function submitStatsRequest(row, low, high) {
         row.elements.low.value = low;
         row.elements.high.value = high;
         row.querySelector('[type=submit]').click();
         await settle();
     }
 
-    return {getRequestRows, getRangeRows, submitRequest, submitRange};
+    return {getDiceTableRequestRows, getStatsRequestRows, submitDiceTableRequest, submitStatsRequest};
 }
 
 async function settle() {

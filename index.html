@@ -170,8 +170,8 @@
             <button type="button" class="panelToggle" aria-expanded="true">Stats</button>
         </h2>
         <div class="panelBody">
-            <div id="rangeList"></div>
-            <button type="button" class="secondary" id="addRange">+ Add range</button>
+            <div id="statsRequestList"></div>
+            <button type="button" class="secondary" id="addStatsRequest">+ Add range</button>
             <p class="emptyNote" id="statsEmpty">Calculate a dice collection in Inputs to see its stats here.</p>
             <div class="tableScroll">
                 <table id="statsTable">
@@ -205,8 +205,8 @@
     </form>
 </template>
 
-<template id="rangeTemplate">
-    <form class="range">
+<template id="statsRequestTemplate">
+    <form class="statsRequest">
         <label>From <input type="number" name="low" step="1" required></label>
         <label>to <input type="number" name="high" step="1" required></label>
         <button type="submit" class="primary">Calculate</button>

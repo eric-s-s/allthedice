@@ -2,11 +2,10 @@ document.addEventListener('DOMContentLoaded', onPageLoad);
 
 function onPageLoad() {
     const diceTableRequests = [];
-    // each: {form, low, high, bounds}, bounds is [low, high] once submitted
-    const ranges = [];
+    const statsRequests = [];
 
     const diceTableRequestList = document.getElementById('diceTableRequestList');
-    const rangeList = document.getElementById('rangeList');
+    const statsRequestList = document.getElementById('statsRequestList');
 
     setUpPanels();
     setUpMenus();
@@ -14,7 +13,9 @@ function onPageLoad() {
     document.getElementById('addDiceTableRequest').addEventListener('click', () =>
         addDiceTableRequest().domElements.input.focus()
     );
-    document.getElementById('addRange').addEventListener('click', () => addRange().low.focus());
+    document.getElementById('addStatsRequest').addEventListener('click', () =>
+        addStatsRequest().domElements.low.focus()
+    );
     document.querySelectorAll('.example').forEach(button => {
         button.addEventListener('click', () => {
             button.closest('details').open = false;
@@ -24,12 +25,12 @@ function onPageLoad() {
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
 
     addDiceTableRequest();
-    addRange();
+    addStatsRequest();
     render();
 
     function addDiceTableRequest() {
         const form = cloneTemplate('diceTableRequestTemplate');
-        const request = {
+        const diceTableRequest = {
             domElements: {
                 form,
                 input: form.elements.buildString,
@@ -44,17 +45,17 @@ function onPageLoad() {
         };
         form.addEventListener('submit', event => {
             event.preventDefault();
-            getDiceTable(request);
+            getDiceTable(diceTableRequest);
         });
-        form.querySelector('.remove').addEventListener('click', () => removeDiceTableRequest(request));
-        diceTableRequests.push(request);
+        form.querySelector('.remove').addEventListener('click', () => removeDiceTableRequest(diceTableRequest));
+        diceTableRequests.push(diceTableRequest);
         diceTableRequestList.append(form);
-        return request;
+        return diceTableRequest;
     }
 
-    function removeDiceTableRequest(request) {
-        diceTableRequests.splice(diceTableRequests.indexOf(request), 1);
-        request.domElements.form.remove();
+    function removeDiceTableRequest(diceTableRequest) {
+        diceTableRequests.splice(diceTableRequests.indexOf(diceTableRequest), 1);
+        diceTableRequest.domElements.form.remove();
         if (diceTableRequests.length === 0) {
             addDiceTableRequest();
         }
@@ -62,146 +63,175 @@ function onPageLoad() {
     }
 
     function getExampleDiceTable(buildString) {
-        const blank = diceTableRequests.find(r =>
-            r.diceTable === null && !r.isPending && r.domElements.input.value.trim() === ''
-        );
-        const request = blank || addDiceTableRequest();
-        request.domElements.input.value = buildString;
-        getDiceTable(request);
+        const diceTableRequest = diceTableRequests.find(isBlank) || addDiceTableRequest();
+        diceTableRequest.domElements.input.value = buildString;
+        getDiceTable(diceTableRequest);
     }
 
-    async function getDiceTable(request) {
-        if (request.isPending) {
+    function isBlank(diceTableRequest) {
+        return diceTableRequest.diceTable === null
+            && !diceTableRequest.isPending
+            && diceTableRequest.domElements.input.value.trim() === '';
+    }
+
+    async function getDiceTable(diceTableRequest) {
+        if (diceTableRequest.isPending) {
             return;
         }
-        setPending(request, true);
-        showError(request, '');
+        setPending(diceTableRequest, true);
+        showError(diceTableRequest, '');
         try {
-            const diceTable = await fetchDiceTable(request.domElements.input.value);
-            request.diceTable = diceTable;
-            request.roller = new AliasTableRoller(diceTable.roller.height, diceTable.roller.aliases);
-            request.rollHistory = [];
+            const diceTable = await fetchDiceTable(diceTableRequest.domElements.input.value);
+            diceTableRequest.diceTable = diceTable;
+            diceTableRequest.roller = new AliasTableRoller(diceTable.roller.height, diceTable.roller.aliases);
+            diceTableRequest.rollHistory = [];
             render();
         } catch (error) {
-            showError(request, error.message);
+            showError(diceTableRequest, error.message);
         } finally {
-            setPending(request, false);
+            setPending(diceTableRequest, false);
         }
     }
 
-    function setPending(request, isPending) {
-        request.isPending = isPending;
-        request.domElements.submit.disabled = isPending;
-        request.domElements.form.setAttribute('aria-busy', String(isPending));
+    function setPending(diceTableRequest, isPending) {
+        diceTableRequest.isPending = isPending;
+        diceTableRequest.domElements.submit.disabled = isPending;
+        diceTableRequest.domElements.form.setAttribute('aria-busy', String(isPending));
     }
 
-    function showError(request, message) {
-        request.domElements.error.textContent = message;
-        request.domElements.error.hidden = message === '';
+    function showError(diceTableRequest, message) {
+        diceTableRequest.domElements.error.textContent = message;
+        diceTableRequest.domElements.error.hidden = message === '';
     }
 
-    function addRange() {
-        const form = cloneTemplate('rangeTemplate');
-        const range = {form, low: form.elements.low, high: form.elements.high, bounds: null};
+    function addStatsRequest() {
+        const form = cloneTemplate('statsRequestTemplate');
+        const statsRequest = {
+            domElements: {form, low: form.elements.low, high: form.elements.high},
+            submittedRollRange: null,
+        };
         form.addEventListener('submit', event => {
             event.preventDefault();
-            const low = parseInt(range.low.value, 10);
-            const high = parseInt(range.high.value, 10);
-            range.bounds = [Math.min(low, high), Math.max(low, high)];
+            const low = parseInt(statsRequest.domElements.low.value, 10);
+            const high = parseInt(statsRequest.domElements.high.value, 10);
+            statsRequest.submittedRollRange = [Math.min(low, high), Math.max(low, high)];
             render();
         });
-        form.querySelector('.remove').addEventListener('click', () => removeRange(range));
-        ranges.push(range);
-        rangeList.append(form);
-        setRangeLimits(range, getLoadedDiceTableRequests());
-        return range;
+        form.querySelector('.remove').addEventListener('click', () => removeStatsRequest(statsRequest));
+        statsRequests.push(statsRequest);
+        statsRequestList.append(form);
+        limitInputsToLoadedRolls(statsRequest, getLoadedDiceTableRequests());
+        fillBlankInputsWithLoadedRolls(statsRequest, getLoadedDiceTableRequests());
+        return statsRequest;
     }
 
-    function removeRange(range) {
-        ranges.splice(ranges.indexOf(range), 1);
-        range.form.remove();
-        if (ranges.length === 0) {
-            addRange();
+    function removeStatsRequest(statsRequest) {
+        statsRequests.splice(statsRequests.indexOf(statsRequest), 1);
+        statsRequest.domElements.form.remove();
+        if (statsRequests.length === 0) {
+            addStatsRequest();
         }
         render();
     }
 
-    // keep range inputs within the rolls the loaded dice tables can make
-    function setRangeLimits(range, loaded) {
-        const inputs = [range.low, range.high];
-        if (loaded.length === 0) {
+    function limitInputsToLoadedRolls(statsRequest, loadedDiceTableRequests) {
+        const inputs = [statsRequest.domElements.low, statsRequest.domElements.high];
+        if (loadedDiceTableRequests.length === 0) {
             inputs.forEach(input => {
                 input.removeAttribute('min');
                 input.removeAttribute('max');
             });
             return;
         }
-        const min = Math.min(...loaded.map(r => r.diceTable.range[0]));
-        const max = Math.max(...loaded.map(r => r.diceTable.range[1]));
+        const [lowest, highest] = getLowestAndHighestRolls(loadedDiceTableRequests);
         inputs.forEach(input => {
-            input.min = min;
-            input.max = max;
+            input.min = lowest;
+            input.max = highest;
         });
-        if (range.low.value === '') {
-            range.low.value = min;
+    }
+
+    function fillBlankInputsWithLoadedRolls(statsRequest, loadedDiceTableRequests) {
+        if (loadedDiceTableRequests.length === 0) {
+            return;
         }
-        if (range.high.value === '') {
-            range.high.value = max;
+        const {low, high} = statsRequest.domElements;
+        const [lowest, highest] = getLowestAndHighestRolls(loadedDiceTableRequests);
+        if (low.value === '') {
+            low.value = lowest;
+        }
+        if (high.value === '') {
+            high.value = highest;
         }
     }
 
     function getLoadedDiceTableRequests() {
-        return diceTableRequests.filter(r => r.diceTable !== null);
+        return diceTableRequests.filter(diceTableRequest => diceTableRequest.diceTable !== null);
     }
 
     function render() {
-        const loaded = getLoadedDiceTableRequests();
-        const submitted = ranges.filter(r => r.bounds !== null);
-        // stats[rangeIndex][loadedIndex], shared by the plot legend and the stats table
-        const stats = submitted.map(range => loaded.map(r =>
-            getStats(r.diceTable.forSciNum, getRollRange(range.bounds[0], range.bounds[1]))
-        ));
+        const loadedDiceTableRequests = getLoadedDiceTableRequests();
+        const submittedStatsResults = getSubmittedStatsResults(loadedDiceTableRequests);
 
-        diceTableRequests.forEach(request => {
-            const index = loaded.indexOf(request);
-            request.domElements.swatch.classList.toggle('active', index !== -1);
-            request.domElements.swatch.style.background = index === -1 ? '' : getTraceColor(index);
+        diceTableRequests.forEach(diceTableRequest => {
+            const loadedIndex = loadedDiceTableRequests.indexOf(diceTableRequest);
+            const swatch = diceTableRequest.domElements.swatch;
+            swatch.classList.toggle('active', loadedIndex !== -1);
+            swatch.style.background = loadedIndex === -1 ? '' : getTraceColor(loadedIndex);
         });
-        ranges.forEach(range => setRangeLimits(range, loaded));
+        statsRequests.forEach(statsRequest => {
+            limitInputsToLoadedRolls(statsRequest, loadedDiceTableRequests);
+            fillBlankInputsWithLoadedRolls(statsRequest, loadedDiceTableRequests);
+        });
 
-        renderPlot(loaded, submitted, stats);
-        renderStatsTable(loaded, submitted, stats);
-        renderRoller(loaded);
+        renderPlot(loadedDiceTableRequests, submittedStatsResults);
+        renderStatsTable(loadedDiceTableRequests, submittedStatsResults);
+        renderRoller(loadedDiceTableRequests);
     }
 
-    function renderPlot(loaded, submitted, stats) {
+    function getSubmittedStatsResults(loadedDiceTableRequests) {
+        const submittedStatsRequests = statsRequests.filter(({submittedRollRange}) => submittedRollRange !== null);
+        return submittedStatsRequests.map(statsRequest => {
+            const [low, high] = statsRequest.submittedRollRange;
+            const rolls = getEveryRollFrom(low, high);
+            return {
+                low,
+                high,
+                colorShiftIndex: statsRequests.indexOf(statsRequest),
+                statsPerLoadedDiceTable: loadedDiceTableRequests.map(({diceTable}) =>
+                    getStats(diceTable.forSciNum, rolls)
+                ),
+            };
+        });
+    }
+
+    function renderPlot(loadedDiceTableRequests, submittedStatsResults) {
         const plotDiv = document.getElementById('plotter');
-        document.getElementById('plotEmpty').hidden = loaded.length > 0;
+        document.getElementById('plotEmpty').hidden = loadedDiceTableRequests.length > 0;
         if (typeof Plotly === 'undefined') {
             plotDiv.textContent = 'The plotting library did not load, so the plot is unavailable.';
             return;
         }
 
-        const traces = loaded.map((request, index) => ({
-            x: request.diceTable.data.x,
-            y: request.diceTable.data.y,
-            name: getDiceListString(request.diceTable.name),
-            mode: request.diceTable.data.x.length <= 100 ? 'lines+markers' : 'lines',
-            line: {color: getTraceColor(index)},
-            marker: {color: getTraceColor(index)},
+        const traces = loadedDiceTableRequests.map((diceTableRequest, loadedIndex) => ({
+            x: diceTableRequest.diceTable.data.x,
+            y: diceTableRequest.diceTable.data.y,
+            name: getDiceListString(diceTableRequest.diceTable.name),
+            mode: diceTableRequest.diceTable.data.x.length <= 100 ? 'lines+markers' : 'lines',
+            line: {color: getTraceColor(loadedIndex)},
+            marker: {color: getTraceColor(loadedIndex)},
         }));
-        submitted.forEach((range, submittedIndex) => {
-            const [low, high] = range.bounds;
-            loaded.forEach((request, index) => {
-                const diceName = getDiceListString(request.diceTable.name);
+        submittedStatsResults.forEach(({low, high, colorShiftIndex, statsPerLoadedDiceTable}) => {
+            loadedDiceTableRequests.forEach((diceTableRequest, loadedIndex) => {
+                const diceName = getDiceListString(diceTableRequest.diceTable.name);
+                const {pctChance} = statsPerLoadedDiceTable[loadedIndex];
                 traces.push({
-                    ...getStatsFillTrace(low, high, request.diceTable.data),
+                    ...getStatsFillTrace(low, high, diceTableRequest.diceTable.data),
                     type: 'scatter',
                     mode: 'none',
                     fill: 'tozeroy',
-                    fillcolor: getStatsFillColor(index, ranges.indexOf(range)),
+                    fillcolor: getStatsFillColor(loadedIndex, colorShiftIndex),
                     hoverinfo: 'skip',
-                    name: getStatsTraceName(diceName, low, high, stats[submittedIndex][index].pctChance),
+                    name: getStatsTraceName(diceName, low, high, pctChance),
                 });
             });
         });
@@ -236,36 +266,36 @@ function onPageLoad() {
         Plotly.react(plotDiv, traces, layout, config);
     }
 
-    function renderStatsTable(loaded, submitted, stats) {
+    function renderStatsTable(loadedDiceTableRequests, submittedStatsResults) {
         const table = document.getElementById('statsTable');
-        document.getElementById('statsEmpty').hidden = loaded.length > 0;
-        table.hidden = loaded.length === 0;
+        document.getElementById('statsEmpty').hidden = loadedDiceTableRequests.length > 0;
+        table.hidden = loadedDiceTableRequests.length === 0;
 
         const head = document.createElement('tr');
         head.append(makeCell('th', ''));
-        loaded.forEach((request, index) => {
-            const cell = makeCell('th', getDiceListString(request.diceTable.name));
+        loadedDiceTableRequests.forEach((diceTableRequest, loadedIndex) => {
+            const cell = makeCell('th', getDiceListString(diceTableRequest.diceTable.name));
             cell.scope = 'col';
-            cell.style.color = getTraceColor(index);
-            cell.title = request.diceTable.diceStr;
+            cell.style.color = getTraceColor(loadedIndex);
+            cell.title = diceTableRequest.diceTable.diceStr;
             head.append(cell);
         });
 
         const rows = [
-            ['Range', r => getRangeLabel(r.diceTable.range[0], r.diceTable.range[1])],
-            ['Mean', r => String(r.diceTable.mean)],
-            ['Std dev', r => String(r.diceTable.stddev)],
+            ['Range', diceTable => getRangeLabel(diceTable.range[0], diceTable.range[1])],
+            ['Mean', diceTable => String(diceTable.mean)],
+            ['Std dev', diceTable => String(diceTable.stddev)],
         ].map(([label, getValue]) => {
             const row = document.createElement('tr');
             row.append(makeCell('th', label));
-            loaded.forEach(r => row.append(makeCell('td', getValue(r))));
+            loadedDiceTableRequests.forEach(({diceTable}) => row.append(makeCell('td', getValue(diceTable))));
             return row;
         });
 
-        submitted.forEach((range, submittedIndex) => {
+        submittedStatsResults.forEach(({low, high, statsPerLoadedDiceTable}) => {
             const row = document.createElement('tr');
-            row.append(makeCell('th', getRangeLabel(range.bounds[0], range.bounds[1])));
-            stats[submittedIndex].forEach(stat => {
+            row.append(makeCell('th', getRangeLabel(low, high)));
+            statsPerLoadedDiceTable.forEach(stat => {
                 const cell = makeCell('td', stat.pctChance + '%');
                 const detail = makeCell('span', '1 in ' + stat.oneInChance);
                 detail.className = 'statDetail';
@@ -280,16 +310,16 @@ function onPageLoad() {
         table.tBodies[0].replaceChildren(...rows);
     }
 
-    function renderRoller(loaded) {
-        document.getElementById('rollerEmpty').hidden = loaded.length > 0;
-        document.getElementById('rollerArea').replaceChildren(...loaded.map(makeRollerRow));
+    function renderRoller(loadedDiceTableRequests) {
+        document.getElementById('rollerEmpty').hidden = loadedDiceTableRequests.length > 0;
+        document.getElementById('rollerArea').replaceChildren(...loadedDiceTableRequests.map(makeRollerRow));
     }
 
-    function makeRollerRow(request) {
+    function makeRollerRow(diceTableRequest) {
         const row = document.createElement('div');
         row.className = 'rollerRow';
 
-        const name = makeCell('span', getDiceListString(request.diceTable.name));
+        const name = makeCell('span', getDiceListString(diceTableRequest.diceTable.name));
         name.className = 'rollerName';
         const button = makeCell('button', 'Roll');
         button.type = 'button';
@@ -301,12 +331,12 @@ function onPageLoad() {
         earlierRolls.className = 'earlierRolls';
 
         const showRolls = () => {
-            const [latest, ...earlier] = request.rollHistory;
+            const [latest, ...earlier] = diceTableRequest.rollHistory;
             latestRoll.textContent = latest ?? 'None';
             earlierRolls.textContent = earlier.join(', ');
         };
         button.addEventListener('click', () => {
-            request.rollHistory.unshift(request.roller.roll());
+            diceTableRequest.rollHistory.unshift(diceTableRequest.roller.roll());
             showRolls();
         });
         showRolls();
@@ -346,6 +376,12 @@ async function parseJsonOrNull(response) {
     } catch (notJson) {
         return null;
     }
+}
+
+function getLowestAndHighestRolls(diceTableRequests) {
+    const lowest = Math.min(...diceTableRequests.map(({diceTable}) => diceTable.range[0]));
+    const highest = Math.max(...diceTableRequests.map(({diceTable}) => diceTable.range[1]));
+    return [lowest, highest];
 }
 
 function cloneTemplate(id) {

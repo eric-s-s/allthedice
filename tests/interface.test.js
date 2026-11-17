@@ -50,11 +50,11 @@ function isShown(page, id) {
     return !page.document.getElementById(id).hidden;
 }
 
-test('the page starts with one blank dice table request, one range, and empty panels', async () => {
+test('the page starts with one blank dice table request, one blank stats request, and empty panels', async () => {
     const page = await openPageWithKnownTables();
-    assert.strictEqual(page.getRequestRows().length, 1);
-    assert.strictEqual(page.getRequestRows()[0].elements.buildString.value, '');
-    assert.strictEqual(page.getRangeRows().length, 1);
+    assert.strictEqual(page.getDiceTableRequestRows().length, 1);
+    assert.strictEqual(page.getDiceTableRequestRows()[0].elements.buildString.value, '');
+    assert.strictEqual(page.getStatsRequestRows().length, 1);
     assert.ok(isShown(page, 'plotEmpty'));
     assert.ok(isShown(page, 'statsEmpty'));
     assert.ok(!isShown(page, 'statsTable'));
@@ -66,14 +66,14 @@ test('the page starts with one blank dice table request, one range, and empty pa
 test('the add button adds a blank dice table request and focuses it', async () => {
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
-    const rows = page.getRequestRows();
+    const rows = page.getDiceTableRequestRows();
     assert.strictEqual(rows.length, 2);
     assert.strictEqual(page.document.activeElement, rows[1].elements.buildString);
 });
 
 test('submitting posts the build string to the lambda as a plain-text body with no headers', async () => {
     const page = await openPageWithKnownTables();
-    await page.submitRequest(page.getRequestRows()[0], 'Die(3)');
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
     assert.strictEqual(page.lambda.requests.length, 1);
     const {url, options} = page.lambda.requests[0];
     assert.strictEqual(url, page.window.getLambdaEndpoint());
@@ -84,8 +84,8 @@ test('submitting posts the build string to the lambda as a plain-text body with 
 
 test('a loaded dice table is plotted with its dice list as the name and its swatch colored', async () => {
     const page = await openPageWithKnownTables();
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(3)');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(3)');
     const [trace] = getLastTraces(page);
     assert.deepStrictEqual(trace.x, [1, 2, 3]);
     assert.deepStrictEqual(trace.y, die3.data.y);
@@ -100,7 +100,7 @@ test('a loaded dice table is plotted with its dice list as the name and its swat
 
 test('a dice table with more than 100 rolls is plotted as lines without markers', async () => {
     const page = await openPageWithKnownTables();
-    await page.submitRequest(page.getRequestRows()[0], 'Die(101)');
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(101)');
     assert.strictEqual(getLastTraces(page)[0].mode, 'lines');
 });
 
@@ -108,9 +108,9 @@ test('trace colors follow the loaded dice tables, skipping requests that have no
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
     page.document.getElementById('addDiceTableRequest').click();
-    const [first, unloaded, third] = page.getRequestRows();
-    await page.submitRequest(first, 'Die(3)');
-    await page.submitRequest(third, 'Die(6)');
+    const [first, unloaded, third] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    await page.submitDiceTableRequest(third, 'Die(6)');
     const traces = getLastTraces(page);
     assert.deepStrictEqual(traces.map(trace => trace.name), ['[1D3]', '[1D6]']);
     assert.strictEqual(traces[1].line.color, page.window.getTraceColor(1));
@@ -128,10 +128,10 @@ test('a pending request disables its submit button and ignores another submit', 
         answerLambda = () => resolve(jsonResponse(200, die3));
     });
     const page = await openPage({lambda});
-    const row = page.getRequestRows()[0];
+    const row = page.getDiceTableRequestRows()[0];
     const submit = row.querySelector('[type=submit]');
 
-    await page.submitRequest(row, 'Die(3)');
+    await page.submitDiceTableRequest(row, 'Die(3)');
     assert.ok(submit.disabled);
     assert.strictEqual(row.getAttribute('aria-busy'), 'true');
     row.dispatchEvent(new page.window.Event('submit', {cancelable: true}));
@@ -146,8 +146,8 @@ test('a pending request disables its submit button and ignores another submit', 
 
 test('a lambda error shows its type and message on the request and plots nothing', async () => {
     const page = await openPageWithKnownTables();
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(');
     const error = row.querySelector('.rowError');
     assert.ok(!error.hidden);
     assert.strictEqual(error.textContent, 'ParseError: could not parse Die(');
@@ -158,8 +158,8 @@ test('a lambda error without a type shows just the message', async () => {
     const lambda = fakeLambda({});
     lambda.respond = () => jsonResponse(400, {errorMessage: 'bad dice'});
     const page = await openPage({lambda});
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(3)');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(3)');
     assert.strictEqual(row.querySelector('.rowError').textContent, 'bad dice');
 });
 
@@ -167,8 +167,8 @@ test('a failed response that is not JSON shows the status', async () => {
     const lambda = fakeLambda({});
     lambda.respond = () => new Response('oops', {status: 502, statusText: 'Bad Gateway'});
     const page = await openPage({lambda});
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(3)');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(3)');
     assert.strictEqual(row.querySelector('.rowError').textContent, 'The dice server answered 502 Bad Gateway.');
 });
 
@@ -176,8 +176,8 @@ test('a successful response that is not JSON is an error', async () => {
     const lambda = fakeLambda({});
     lambda.respond = () => new Response('oops', {status: 200});
     const page = await openPage({lambda});
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(3)');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(3)');
     assert.strictEqual(row.querySelector('.rowError').textContent, 'The dice server sent a response that was not JSON.');
 });
 
@@ -185,8 +185,8 @@ test('an unreachable lambda names the endpoint', async () => {
     const lambda = fakeLambda({});
     lambda.respond = () => Promise.reject(new TypeError('Failed to fetch'));
     const page = await openPage({lambda});
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(3)');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(3)');
     assert.strictEqual(
         row.querySelector('.rowError').textContent,
         `Could not reach the dice server at ${page.window.getLambdaEndpoint()}.`
@@ -195,18 +195,18 @@ test('an unreachable lambda names the endpoint', async () => {
 
 test('a successful submit clears the previous error', async () => {
     const page = await openPageWithKnownTables();
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(');
-    await page.submitRequest(row, 'Die(3)');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(');
+    await page.submitDiceTableRequest(row, 'Die(3)');
     assert.ok(row.querySelector('.rowError').hidden);
     assert.strictEqual(row.querySelector('.rowError').textContent, '');
 });
 
 test('a failed resubmit keeps the dice table that was already loaded', async () => {
     const page = await openPageWithKnownTables();
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(3)');
-    await page.submitRequest(row, 'Die(');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(3)');
+    await page.submitDiceTableRequest(row, 'Die(');
     assert.deepStrictEqual(getTraceNames(page), ['[1D3]']);
     assert.ok(!row.querySelector('.rowError').hidden);
 });
@@ -214,11 +214,11 @@ test('a failed resubmit keeps the dice table that was already loaded', async () 
 test('removing a dice table request removes its trace', async () => {
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
-    const [first, second] = page.getRequestRows();
-    await page.submitRequest(first, 'Die(3)');
-    await page.submitRequest(second, 'Die(6)');
+    const [first, second] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    await page.submitDiceTableRequest(second, 'Die(6)');
     first.querySelector('.remove').click();
-    assert.deepStrictEqual(page.getRequestRows(), [second]);
+    assert.deepStrictEqual(page.getDiceTableRequestRows(), [second]);
     assert.deepStrictEqual(getTraceNames(page), ['[1D6]']);
     assert.strictEqual(
         second.querySelector('.swatch').style.background,
@@ -228,10 +228,10 @@ test('removing a dice table request removes its trace', async () => {
 
 test('removing the last dice table request leaves a blank one', async () => {
     const page = await openPageWithKnownTables();
-    const row = page.getRequestRows()[0];
-    await page.submitRequest(row, 'Die(3)');
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(3)');
     row.querySelector('.remove').click();
-    const rows = page.getRequestRows();
+    const rows = page.getDiceTableRequestRows();
     assert.strictEqual(rows.length, 1);
     assert.notStrictEqual(rows[0], row);
     assert.strictEqual(rows[0].elements.buildString.value, '');
@@ -252,7 +252,7 @@ test('an example fills the blank dice table request, gets its table, and closes 
     const button = clickExample(page, 'Die(6)');
     await settle();
     assert.ok(!button.closest('details').open);
-    const rows = page.getRequestRows();
+    const rows = page.getDiceTableRequestRows();
     assert.strictEqual(rows.length, 1);
     assert.strictEqual(rows[0].elements.buildString.value, 'Die(6)');
     assert.deepStrictEqual(lambda.requests.map(r => r.buildString), ['Die(6)']);
@@ -261,20 +261,20 @@ test('an example fills the blank dice table request, gets its table, and closes 
 
 test('an example adds a dice table request when none is blank', async () => {
     const page = await openPage({lambda: fakeLambda({'Die(3)': die3, 'Die(6)': die6})});
-    await page.submitRequest(page.getRequestRows()[0], 'Die(3)');
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
     clickExample(page, 'Die(6)');
     await settle();
-    const rows = page.getRequestRows();
+    const rows = page.getDiceTableRequestRows();
     assert.deepStrictEqual(rows.map(row => row.elements.buildString.value), ['Die(3)', 'Die(6)']);
     assert.deepStrictEqual(getTraceNames(page), ['[1D3]', '[1D6]']);
 });
 
 test('an example skips a request that has text but has not been submitted', async () => {
     const page = await openPage({lambda: fakeLambda({'Die(6)': die6})});
-    page.getRequestRows()[0].elements.buildString.value = 'Die(4)';
+    page.getDiceTableRequestRows()[0].elements.buildString.value = 'Die(4)';
     clickExample(page, 'Die(6)');
     await settle();
-    assert.deepStrictEqual(page.getRequestRows().map(row => row.elements.buildString.value), ['Die(4)', 'Die(6)']);
+    assert.deepStrictEqual(page.getDiceTableRequestRows().map(row => row.elements.buildString.value), ['Die(4)', 'Die(6)']);
 });
 
 function queueRollOfColumn(page, column) {
@@ -287,9 +287,9 @@ test('the roller has a row for each loaded dice table', async () => {
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
     page.document.getElementById('addDiceTableRequest').click();
-    const [first, , third] = page.getRequestRows();
-    await page.submitRequest(first, 'Die(3)');
-    await page.submitRequest(third, 'Die(6)');
+    const [first, , third] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    await page.submitDiceTableRequest(third, 'Die(6)');
     assert.ok(!isShown(page, 'rollerEmpty'));
     assert.strictEqual(page.document.querySelectorAll('#rollerArea .rollerRow').length, 2);
     assert.strictEqual(getRollerRow(page, 0).name, '[1D3]');
@@ -299,7 +299,7 @@ test('the roller has a row for each loaded dice table', async () => {
 
 test('rolling shows the latest roll and the earlier rolls newest first', async () => {
     const page = await openPageWithKnownTables();
-    await page.submitRequest(page.getRequestRows()[0], 'Die(3)');
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
     queueRollOfColumn(page, 0);
     queueRollOfColumn(page, 2);
     queueRollOfColumn(page, 1);
@@ -315,25 +315,25 @@ test('rolling shows the latest roll and the earlier rolls newest first', async (
 
 test('roll history survives a redraw but is cleared when the dice table is reloaded', async () => {
     const page = await openPageWithKnownTables();
-    const [row] = page.getRequestRows();
-    await page.submitRequest(row, 'Die(3)');
+    const [row] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(row, 'Die(3)');
     queueRollOfColumn(page, 2);
     getRollerRow(page).rollButton.click();
 
     page.document.getElementById('addDiceTableRequest').click();
-    await page.submitRequest(page.getRequestRows()[1], 'Die(6)');
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[1], 'Die(6)');
     assert.strictEqual(getRollerRow(page).latestRoll(), '3');
 
-    await page.submitRequest(row, 'Die(6)');
+    await page.submitDiceTableRequest(row, 'Die(6)');
     assert.strictEqual(getRollerRow(page).latestRoll(), 'None');
 });
 
 test('the stats table has a column per loaded dice table with range, mean and std dev', async () => {
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
-    const [first, second] = page.getRequestRows();
-    await page.submitRequest(first, 'Die(3)');
-    await page.submitRequest(second, 'Die(6)');
+    const [first, second] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    await page.submitDiceTableRequest(second, 'Die(6)');
     assert.ok(isShown(page, 'statsTable'));
     assert.ok(!isShown(page, 'statsEmpty'));
     assert.deepStrictEqual(getStatsTableRows(page), [
@@ -347,51 +347,51 @@ test('the stats table has a column per loaded dice table with range, mean and st
     assert.strictEqual(headers[2].style.color, asCssColor(page, page.window.getTraceColor(1)));
 });
 
-test('range inputs are limited to the rolls the loaded dice tables can make', async () => {
+test('stats request inputs are limited to the rolls the loaded dice tables can make', async () => {
     const page = await openPageWithKnownTables();
-    const [range] = page.getRangeRows();
-    assert.strictEqual(range.elements.low.getAttribute('min'), null);
+    const [statsRequest] = page.getStatsRequestRows();
+    assert.strictEqual(statsRequest.elements.low.getAttribute('min'), null);
 
     page.document.getElementById('addDiceTableRequest').click();
-    const [first, second] = page.getRequestRows();
-    await page.submitRequest(first, 'Die(3)');
-    await page.submitRequest(second, 'Die(3)+10');
-    for (const input of [range.elements.low, range.elements.high]) {
+    const [first, second] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    await page.submitDiceTableRequest(second, 'Die(3)+10');
+    for (const input of [statsRequest.elements.low, statsRequest.elements.high]) {
         assert.strictEqual(input.min, '1');
         assert.strictEqual(input.max, '13');
     }
 
     first.querySelector('.remove').click();
     second.querySelector('.remove').click();
-    assert.strictEqual(range.elements.low.getAttribute('min'), null);
-    assert.strictEqual(range.elements.high.getAttribute('max'), null);
+    assert.strictEqual(statsRequest.elements.low.getAttribute('min'), null);
+    assert.strictEqual(statsRequest.elements.high.getAttribute('max'), null);
 });
 
-test('blank range inputs are filled with the lowest and highest rolls, filled ones are kept', async () => {
+test('blank stats request inputs are filled with the lowest and highest rolls, filled ones are kept', async () => {
     const page = await openPageWithKnownTables();
-    const [range] = page.getRangeRows();
-    await page.submitRequest(page.getRequestRows()[0], 'Die(3)');
-    assert.strictEqual(range.elements.low.value, '1');
-    assert.strictEqual(range.elements.high.value, '3');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
+    assert.strictEqual(statsRequest.elements.low.value, '1');
+    assert.strictEqual(statsRequest.elements.high.value, '3');
 
     page.document.getElementById('addDiceTableRequest').click();
-    await page.submitRequest(page.getRequestRows()[1], 'Die(3)+10');
-    assert.strictEqual(range.elements.high.value, '3');
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[1], 'Die(3)+10');
+    assert.strictEqual(statsRequest.elements.high.value, '3');
 
-    page.document.getElementById('addRange').click();
-    const added = page.getRangeRows()[1];
+    page.document.getElementById('addStatsRequest').click();
+    const added = page.getStatsRequestRows()[1];
     assert.strictEqual(added.elements.low.value, '1');
     assert.strictEqual(added.elements.high.value, '13');
     assert.strictEqual(page.document.activeElement, added.elements.low);
 });
 
-test('a submitted range adds a stats row and a shaded trace for each loaded dice table', async () => {
+test('a submitted stats request adds a stats row and a shaded trace for each loaded dice table', async () => {
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
-    const [first, second] = page.getRequestRows();
-    await page.submitRequest(first, 'Die(3)');
-    await page.submitRequest(second, 'Die(6)');
-    await page.submitRange(page.getRangeRows()[0], 3, 2);
+    const [first, second] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    await page.submitDiceTableRequest(second, 'Die(6)');
+    await page.submitStatsRequest(page.getStatsRequestRows()[0], 3, 2);
 
     const die3Stats = page.window.getStats(die3.forSciNum, [2, 3]);
     const die6Stats = page.window.getStats(die6.forSciNum, [2, 3]);
@@ -414,21 +414,21 @@ test('a submitted range adds a stats row and a shaded trace for each loaded dice
     );
 });
 
-test('a single-roll range is labeled with just that roll', async () => {
+test('a single-roll stats request is labeled with just that roll', async () => {
     const page = await openPageWithKnownTables();
-    await page.submitRequest(page.getRequestRows()[0], 'Die(3)');
-    await page.submitRange(page.getRangeRows()[0], 2, 2);
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
+    await page.submitStatsRequest(page.getStatsRequestRows()[0], 2, 2);
     assert.strictEqual(getStatsTableRows(page)[4][0], '2');
 });
 
-test('removing a range removes its stats row and shaded traces', async () => {
+test('removing a stats request removes its stats row and shaded traces', async () => {
     const page = await openPageWithKnownTables();
-    await page.submitRequest(page.getRequestRows()[0], 'Die(3)');
-    page.document.getElementById('addRange').click();
-    const [firstRange, secondRange] = page.getRangeRows();
-    await page.submitRange(firstRange, 1, 1);
-    await page.submitRange(secondRange, 3, 3);
-    firstRange.querySelector('.remove').click();
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
+    page.document.getElementById('addStatsRequest').click();
+    const [firstStatsRequest, secondStatsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(firstStatsRequest, 1, 1);
+    await page.submitStatsRequest(secondStatsRequest, 3, 3);
+    firstStatsRequest.querySelector('.remove').click();
     assert.deepStrictEqual(getStatsTableRows(page).slice(4).map(row => row[0]), ['3']);
     assert.strictEqual(getLastTraces(page).length, 2);
     assert.strictEqual(
@@ -437,21 +437,34 @@ test('removing a range removes its stats row and shaded traces', async () => {
     );
 });
 
-test('removing the last range leaves a blank one', async () => {
+test('a stats request is shaded by its position among all stats requests, submitted or not', async () => {
     const page = await openPageWithKnownTables();
-    await page.submitRequest(page.getRequestRows()[0], 'Die(3)');
-    const [range] = page.getRangeRows();
-    await page.submitRange(range, 1, 2);
-    range.querySelector('.remove').click();
-    const ranges = page.getRangeRows();
-    assert.strictEqual(ranges.length, 1);
-    assert.notStrictEqual(ranges[0], range);
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
+    page.document.getElementById('addStatsRequest').click();
+    const [unsubmitted, submitted] = page.getStatsRequestRows();
+    await page.submitStatsRequest(submitted, 1, 2);
+    assert.strictEqual(getLastTraces(page)[1].fillcolor, page.window.getStatsFillColor(0, 1));
+
+    await page.submitStatsRequest(unsubmitted, 3, 3);
+    const fillColors = getLastTraces(page).slice(1).map(trace => trace.fillcolor);
+    assert.deepStrictEqual(fillColors, [page.window.getStatsFillColor(0, 0), page.window.getStatsFillColor(0, 1)]);
+});
+
+test('removing the last stats request leaves a blank one', async () => {
+    const page = await openPageWithKnownTables();
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(statsRequest, 1, 2);
+    statsRequest.querySelector('.remove').click();
+    const statsRequestRows = page.getStatsRequestRows();
+    assert.strictEqual(statsRequestRows.length, 1);
+    assert.notStrictEqual(statsRequestRows[0], statsRequest);
     assert.strictEqual(getStatsTableRows(page).length, 4);
 });
 
 test('the plot says it is unavailable when plotly did not load', async () => {
     const page = await openPageWithKnownTables({hasPlotly: false});
-    await page.submitRequest(page.getRequestRows()[0], 'Die(3)');
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
     assert.strictEqual(
         page.document.getElementById('plotter').textContent,
         'The plotting library did not load, so the plot is unavailable.'

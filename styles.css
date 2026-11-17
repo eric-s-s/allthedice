@@ -391,7 +391,7 @@ input[type=text] {
 
 /* ---------- stats ---------- */
 
-.range {
+.statsRequest {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -399,14 +399,14 @@ input[type=text] {
     margin-bottom: 8px;
 }
 
-.range label {
+.statsRequest label {
     display: flex;
     align-items: center;
     gap: 6px;
     color: var(--muted);
 }
 
-.range input {
+.statsRequest input {
     width: 7em;
 }
 
@@ -547,7 +547,7 @@ input[type=text] {
     }
 
     /* narrow enough that "From [ ] to [ ]" stays on one line */
-    .range input {
+    .statsRequest input {
         width: 5em;
     }
 

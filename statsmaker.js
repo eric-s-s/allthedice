@@ -1,4 +1,4 @@
-function getRollRange(low, high) {
+function getEveryRollFrom(low, high) {
     const start = Math.min(low, high);
     const stop = Math.max(low, high);
     const rolls = [];
