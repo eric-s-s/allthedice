@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Models Spec</title>
+<style>
+    :root {
+        --bg: #ffffff;
+        --text: #1f2328;
+        --muted: #59636e;
+        --border: #d1d9e0;
+        --code-bg: #f3f4f6;
+        --accent: #0969da;
+        --note-bg: #eef5ff;
+        color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg: #0d1117;
+            --text: #e6edf3;
+            --muted: #9198a1;
+            --border: #3d444d;
+            --code-bg: #161b22;
+            --accent: #4493f8;
+            --note-bg: #12233a;
+        }
+    }
+    body {
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 2rem 16px 4rem;
+    }
+    main { max-width: 52rem; margin: 0 auto; }
+    h1 { margin-bottom: 0.25rem; }
+    h2 { margin-top: 2.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 1.75rem; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .note { background: var(--note-bg); border-left: 4px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+    pre { background: var(--code-bg); padding: 0.9rem 1rem; border-radius: 6px; overflow-x: auto; }
+    pre code { background: none; padding: 0; }
+    .tableWrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+    th { background: var(--code-bg); }
+    a { color: var(--accent); }
+    nav ol { padding-left: 1.25rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Data Models Spec</h1>
+<p class="subtitle">Separate data models from views in <code>interface.js</code>, so nothing is matched by array position.</p>
+
+<p class="note">Colors are assigned when a dice table first <strong>loads</strong>, not when its request is created.
+Only §3 would change if that decision changes.</p>
+
+<nav>
+<ol>
+    <li><a href="#goals">Goals</a></li>
+    <li><a href="#models">Data models</a></li>
+    <li><a href="#colors">Color assignment</a></li>
+    <li><a href="#views">Views</a></li>
+    <li><a href="#wiring">Connecting views to models</a></li>
+    <li><a href="#typecheck">Type checking</a></li>
+    <li><a href="#behavior">Behavior changes</a></li>
+    <li><a href="#tests">Tests</a></li>
+    <li><a href="#questions">Decisions and open questions</a></li>
+</ol>
+</nav>
+
+<h2 id="goals">1. Goals</h2>
+<ol>
+    <li>Every piece of state lives in a plain data model. The DOM is never the source of truth.</li>
+    <li>Nothing is matched by array position. Dice tables, stats ranges and their colors are linked by id and by stored indexes.</li>
+    <li>Colors stay with a dice table or range for its lifetime. Removing one doesn't recolor the others.</li>
+    <li>Every model has a JSDoc type, and <code>tsc --noEmit</code> checks the code in <code>make test</code> and CI.</li>
+    <li>The Lambda response is checked once, when it arrives (<code>parseDiceTable</code>).</li>
+</ol>
+<p><strong>Out of scope:</strong> panel minimizing, menus, the Lambda API, <code>SciNum</code>,
+<code>AliasTableRoller</code> internals, and visual design.</p>
+
+<h2 id="models">2. Data models (new file <code>models.js</code>)</h2>
+
+<h3><code>DiceTable</code>: the parsed server response, read-only after parsing</h3>
+<div class="tableWrap"><table>
+    <tr><th>field</th><th>type</th><th>notes</th></tr>
+    <tr><td><code>name</code></td><td><code>string</code></td><td></td></tr>
+    <tr><td><code>diceList</code></td><td><code>string</code></td><td>from <code>getDiceList(name)</code>, computed once</td></tr>
+    <tr><td><code>diceStr</code></td><td><code>string</code></td><td></td></tr>
+    <tr><td><code>data</code></td><td><code>{x: number[], y: number[]}</code></td><td>same length (checked)</td></tr>
+    <tr><td><code>forSciNum</code></td><td><code>{roll: number, mantissa: string, exponent: string}[]</code></td><td></td></tr>
+    <tr><td><code>range</code></td><td><code>{low: number, high: number}</code></td><td>the server sends <code>[low, high]</code>; <code>parseDiceTable</code> converts it. The server is not changed.</td></tr>
+    <tr><td><code>mean</code>, <code>stddev</code></td><td><code>number</code></td><td></td></tr>
+    <tr><td><code>roller</code></td><td><code>{height: string, aliases: Alias[]}</code></td><td>given to <code>AliasTableRoller</code> unchanged</td></tr>
+</table></div>
+<p><code>parseDiceTable(json): DiceTable</code> throws an <code>Error</code> with a readable message when a field is
+missing or has the wrong type. <code>fetchDiceTable</code> calls it, so a bad response shows up in the request's error
+the same way a server error does.</p>
+
+<h3><code>DiceTableRequest</code></h3>
+<div class="tableWrap"><table>
+    <tr><th>field</th><th>type</th><th>notes</th></tr>
+    <tr><td><code>id</code></td><td><code>string</code></td><td><code>crypto.randomUUID()</code></td></tr>
+    <tr><td><code>buildStringInput</code></td><td><code>string</code></td><td>the text in the input box, copied on every <code>input</code> event. It can differ from the build string of the loaded table.</td></tr>
+    <tr><td><code>isPending</code></td><td><code>boolean</code></td><td>stored only here</td></tr>
+    <tr><td><code>error</code></td><td><code>string</code></td><td><code>''</code> means no error</td></tr>
+    <tr><td><code>diceTable</code></td><td><code>DiceTable | null</code></td><td></td></tr>
+    <tr><td><code>roller</code></td><td><code>AliasTableRoller | null</code></td><td>always set together with <code>diceTable</code></td></tr>
+    <tr><td><code>colorIndex</code></td><td><code>number | null</code></td><td><code>null</code> until the first successful load (§3)</td></tr>
+    <tr><td><code>rollHistory</code></td><td><code>string[]</code></td><td>newest first</td></tr>
+</table></div>
+<p>Methods: <code>isLoaded</code>, <code>isBlank()</code>, <code>load(diceTable, colorIndex)</code> (sets the table and
+roller and clears the history), and <code>roll()</code> (throws if nothing is loaded).</p>
+
+<h4>States</h4>
+<p>A request is not a dice table. It can hold text and nothing else. These are the allowed states:</p>
+<div class="tableWrap"><table>
+    <tr><th>state</th><th><code>buildStringInput</code></th><th><code>isPending</code></th><th><code>error</code></th><th><code>diceTable</code> / <code>roller</code> / <code>colorIndex</code></th></tr>
+    <tr><td>blank</td><td><code>''</code></td><td><code>false</code></td><td><code>''</code></td><td><code>null</code></td></tr>
+    <tr><td>typed, not submitted</td><td><code>'3*Die(8)'</code></td><td><code>false</code></td><td><code>''</code></td><td><code>null</code></td></tr>
+    <tr><td>first load in progress</td><td><code>'3*Die(8)'</code></td><td><code>true</code></td><td><code>''</code></td><td><code>null</code></td></tr>
+    <tr><td>first load failed</td><td><code>'3*Dei(8)'</code></td><td><code>false</code></td><td><code>'ParseError: …'</code></td><td><code>null</code></td></tr>
+    <tr><td>loaded</td><td><code>'3*Die(8)'</code></td><td><code>false</code></td><td><code>''</code></td><td>set</td></tr>
+    <tr><td>loaded, then reload failed</td><td><code>'3*Dei(8)'</code></td><td><code>false</code></td><td><code>'ParseError: …'</code></td><td>still the old table</td></tr>
+</table></div>
+<p>Invariants:</p>
+<ul>
+    <li><code>roller</code> is set if and only if <code>diceTable</code> is set.</li>
+    <li><code>colorIndex</code> is non-null if and only if <code>diceTable</code> is set.</li>
+    <li><code>rollHistory</code> is empty unless <code>diceTable</code> is set.</li>
+    <li>Once loaded, the text can be edited, so <code>buildStringInput</code> doesn't have to match the table that is
+        shown. The model doesn't record which build string produced <code>diceTable</code>, because nothing needs it:
+        the plot and stats read only the data inside <code>diceTable</code> (see §9).</li>
+</ul>
+
+<h3><code>StatsRequest</code></h3>
+<div class="tableWrap"><table>
+    <tr><th>field</th><th>type</th><th>notes</th></tr>
+    <tr><td><code>id</code></td><td><code>string</code></td><td></td></tr>
+    <tr><td><code>lowInput</code>, <code>highInput</code></td><td><code>string</code></td><td>the raw input values, which can be blank</td></tr>
+    <tr><td><code>submittedRange</code></td><td><code>{low, high} | null</code></td><td>stored sorted</td></tr>
+    <tr><td><code>shiftIndex</code></td><td><code>number | null</code></td><td><code>null</code> until first submitted (§3)</td></tr>
+</table></div>
+<p>Method: <code>submit()</code> parses the inputs, sorts them, sets <code>submittedRange</code>, and assigns
+<code>shiftIndex</code> if it doesn't have one yet.</p>
+
+<h3><code>AppState</code></h3>
+<pre><code>{diceTableRequests: DiceTableRequest[], statsRequests: StatsRequest[]}</code></pre>
+<p>The order of the arrays is creation order. It decides the order of the plot traces, table columns and roller rows,
+but not colors.</p>
+<p><strong>Debugging access:</strong> the state is exposed as <code>window.allTheDice.state</code>, so it can be read
+from the browser console without a breakpoint. It's a debugging aid, not an API: nothing in the app reads it, and
+writing to it from the console is unsupported.</p>
+
+<h3>Derived values (computed in <code>render()</code>, never stored)</h3>
+<ul>
+    <li><code>loaded = diceTableRequests.filter(r =&gt; r.isLoaded)</code></li>
+    <li><code>StatsCell = {statsRequest, diceTableRequest, stats}</code>, built for each pair of a submitted range and a
+        loaded table. The plot and stats table read each cell's own references instead of matching two arrays by index.</li>
+</ul>
+
+<h2 id="colors">3. Color assignment</h2>
+<ul>
+    <li><strong><code>colorIndex</code></strong> is assigned in <code>DiceTableRequest.load()</code> on the first
+        successful load, as <code>lowestUnusedIndex(the colorIndex values of the other requests)</code>. It stays the
+        same on later reloads and is freed when the request is removed. A failed load assigns nothing.</li>
+    <li><strong><code>shiftIndex</code></strong> is assigned on a stats request's first submit, using
+        <code>lowestUnusedIndex</code> over the other stats requests. It's freed when the request is removed.</li>
+    <li><strong>Allocation</strong> happens in a function that receives <code>AppState</code>
+        (<code>lowestUnusedIndex</code> in <code>models.js</code>). The models only store the result.</li>
+    <li><strong>Index to color</strong> stays in <code>plothelpers.js</code>:
+        <ul>
+            <li>Swatch, plot line and table header: <code>getTraceColor(colorIndex)</code></li>
+            <li>Fill: <code>getStatsFillColor(colorIndex, shiftIndex)</code></li>
+        </ul>
+    </li>
+    <li><strong>Single palette:</strong> <code>plotlyDefaultRgb</code> is the only list of colors.
+        <code>getTraceColor</code> builds its hex string from it.</li>
+</ul>
+<pre><code>function lowestUnusedIndex(usedIndexes) {
+    let index = 0;
+    while (usedIndexes.includes(index)) {
+        index++;
+    }
+    return index;
+}</code></pre>
+
+<h2 id="views">4. Views</h2>
+<ul>
+    <li><strong><code>DiceTableRequestView</code></strong>: owns its form, input, submit button, error element and swatch.
+        <ul>
+            <li>Constructor: <code>(model, actions)</code>.</li>
+            <li>Its listeners update the model or call <code>actions</code> (submit, remove). They never write DOM state
+                the model doesn't hold.</li>
+            <li><code>update(model)</code> sets <code>disabled</code>, <code>aria-busy</code>, the error text and whether
+                it's hidden, and the swatch color. It sets <code>input.value</code> only when it's different from the
+                model, so the cursor isn't reset.</li>
+        </ul>
+    </li>
+    <li><strong><code>StatsRequestView</code></strong>: works the same way. <code>update</code> sets
+        <code>min</code>/<code>max</code>, and fills <code>low.value</code>/<code>high.value</code> from the model when
+        they differ.</li>
+    <li><strong>Plot, stats table and roller rows</strong> are rebuilt from the state on every render, as they are now.
+        Roller rows read <code>rollHistory</code> from the model.</li>
+</ul>
+
+<h2 id="wiring">5. Connecting views to models</h2>
+<ul>
+    <li><code>onPageLoad</code> keeps the state in an <code>AppState</code>, and keeps two maps:
+        <code>Map&lt;id, DiceTableRequestView&gt;</code> and <code>Map&lt;id, StatsRequestView&gt;</code>.</li>
+    <li><code>render()</code> goes through each model list in order:
+        <ul>
+            <li>It creates and appends a view for any id that doesn't have one, calls <code>view.update(model)</code>,
+                and appends the view's element so the DOM order follows the model order.</li>
+            <li>It then removes the views and DOM elements for ids that no longer have a model.</li>
+        </ul>
+    </li>
+    <li>Only views write to the DOM, and only during <code>update</code>. Only event handlers, <code>submit</code> and
+        <code>load</code> change the models, and they call <code>render()</code> afterwards.</li>
+    <li><strong>Filling blank stats inputs</strong> (today's <code>fillBlankInputsWithLoadedRolls</code>) becomes a step
+        in <code>render()</code> that runs before the views update. It writes the lowest and highest rolls into
+        <code>lowInput</code>/<code>highInput</code> when they're blank, and the views then show those values.</li>
+</ul>
+
+<h2 id="typecheck">6. Type checking</h2>
+<ul>
+    <li>Add <code>typescript</code> as a devDependency and a <code>jsconfig.json</code> with <code>checkJs</code>,
+        <code>noEmit</code>, <code>strict</code> and <code>lib: ["dom", "es2023"]</code>. It includes the app's
+        <code>.js</code> files, which share one global scope through the script tags.</li>
+    <li>Add a <code>typecheck</code> target to the Makefile and make <code>make test</code> depend on it, so CI runs it
+        without any change to the workflow.</li>
+    <li>Add <code>models.js</code> to <code>ASSETS</code> and to <code>index.html</code> (before
+        <code>interface.js</code>), check whether <code>tests/load.js</code> needs the file added, and run
+        <code>make cache-bust</code>.</li>
+</ul>
+
+<h2 id="behavior">7. Behavior changes</h2>
+<div class="tableWrap"><table>
+    <tr><th>today</th><th>after</th></tr>
+    <tr><td>Removing a loaded table recolors the tables after it</td><td>Colors stay; the freed color goes to the next table that loads</td></tr>
+    <tr><td>Removing a stats range shifts the others' fill colors</td><td>Fill colors stay</td></tr>
+    <tr><td>An unsubmitted stats request takes up a shift slot</td><td>It takes a slot only once submitted</td></tr>
+    <tr><td>A malformed 200 response causes errors later (in plot or stats)</td><td><code>parseDiceTable</code> rejects it and shows an error on the request</td></tr>
+</table></div>
+<p>Everything else stays the same: examples, pending handling, keeping the old table when a reload fails, roll history,
+input limits, and the "leave one blank request" rule.</p>
+
+<h2 id="tests">8. Tests</h2>
+<ul>
+    <li><strong>Rewrite:</strong> <code>interface.test.js:107</code> (trace colors), <code>:424</code> (removing a stats
+        request) and <code>:440</code> (shading by position) to match §7.</li>
+    <li><strong>Add:</strong>
+        <ul>
+            <li>Colors stay the same after removing an earlier table or range.</li>
+            <li>A freed color is reused.</li>
+            <li>A reload keeps the table's color.</li>
+            <li><code>parseDiceTable</code> rejects missing or badly typed fields.</li>
+            <li><code>lowestUnusedIndex</code> works.</li>
+            <li>A view's <code>update</code> doesn't reset <code>input.value</code> when it hasn't changed.</li>
+        </ul>
+    </li>
+    <li><strong>Unit tests</strong> for the models in a new <code>tests/models.test.js</code>, with no DOM.</li>
+    <li>Every other existing test in <code>interface.test.js</code> should pass without changes. If one doesn't, that
+        points to an unintended behavior change.</li>
+</ul>
+
+<h2 id="questions">9. Decisions and open questions</h2>
+<h3>Decided</h3>
+<ol>
+    <li><strong>A stats range gets its shift on first submit,</strong> not at creation. This matches dice tables
+        getting their color on first load.</li>
+    <li><strong><code>buildStringInput</code> is copied on every <code>input</code> event.</strong> Copying only on
+        submit would leave the model out of date: an example would treat a request with typed but unsubmitted text as
+        blank and overwrite it, and any render would reset the input to the stale value. The same applies to
+        <code>lowInput</code>/<code>highInput</code>.</li>
+    <li><strong>The server is not changed.</strong> It keeps sending <code>range</code> as <code>[low, high]</code>.
+        Internally the model uses <code>{low, high}</code>, and <code>parseDiceTable</code> converts it.</li>
+    <li><strong>The work is done in two stages.</strong> First, the models, <code>parseDiceTable</code> and type
+        checking, with no behavior change. Second, the views, stable colors and the test rewrites.</li>
+    <li><strong>A failed reload keeps the old table</strong> (unchanged from today). Wiping it would throw away the
+        plot line, stats column, roll history and color on a typo or a network failure.</li>
+    <li><strong>No <code>loadedBuildString</code> field.</strong> Nothing currently needs to know which build string
+        produced the loaded table, so it isn't added. Add it only if a behavior change needs it.</li>
+</ol>
+</main>
+</body>
+</html>
