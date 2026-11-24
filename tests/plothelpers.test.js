@@ -25,6 +25,14 @@ test('getTraceColor cycles through ten colors', () => {
     assert.strictEqual(getTraceColor(10), getTraceColor(0));
 });
 
+test('getTraceColor gives the plotly default colors as hex', () => {
+    const plotlyDefaultColors = [
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+    ];
+    assert.deepStrictEqual(plotlyDefaultColors.map((_, index) => getTraceColor(index)), plotlyDefaultColors);
+});
+
 test('getStatsFillColor shifts the trace color per range and stays half transparent', () => {
     assert.strictEqual(getStatsFillColor(0, 0), 'rgba(31,109,190,0.5)');
     assert.strictEqual(getStatsFillColor(0, 1), 'rgba(41,129,190,0.5)');

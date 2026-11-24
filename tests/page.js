@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const {JSDOM} = require('jsdom');
 
 const repoRoot = path.join(__dirname, '..');
-const pageScripts = ['scinum.js', 'statsmaker.js', 'roller.js', 'plothelpers.js', 'config.js', 'interface.js'];
+const pageScripts = ['scinum.js', 'statsmaker.js', 'roller.js', 'plothelpers.js', 'config.js', 'models.js', 'interface.js'];
 
 async function openPage({lambda = fakeLambda({}), hasPlotly = true, isNarrowScreen = false, storedMinimizedPanels} = {}) {
     const dom = new JSDOM(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), {
@@ -25,8 +25,13 @@ async function openPage({lambda = fakeLambda({}), hasPlotly = true, isNarrowScre
         window.Plotly = plotly;
     }
     const queuedRandomBytes = [];
+    let lastId = 0;
     Object.defineProperty(window, 'crypto', {
         value: {
+            randomUUID() {
+                lastId++;
+                return `id-${lastId}`;
+            },
             getRandomValues(bytes) {
                 bytes.fill(queuedRandomBytes.length > 0 ? queuedRandomBytes.shift() : 0);
                 return bytes;
@@ -48,20 +53,25 @@ function pageActions(window) {
     const getDiceTableRequestRows = () => [...document.querySelectorAll('#diceTableRequestList form')];
     const getStatsRequestRows = () => [...document.querySelectorAll('#statsRequestList form')];
 
+    function typeInto(input, value) {
+        input.value = value;
+        input.dispatchEvent(new window.Event('input', {bubbles: true}));
+    }
+
     async function submitDiceTableRequest(row, buildString) {
-        row.elements.buildString.value = buildString;
+        typeInto(row.elements.buildString, buildString);
         row.querySelector('[type=submit]').click();
         await settle();
     }
 
     async function submitStatsRequest(row, low, high) {
-        row.elements.low.value = low;
-        row.elements.high.value = high;
+        typeInto(row.elements.low, String(low));
+        typeInto(row.elements.high, String(high));
         row.querySelector('[type=submit]').click();
         await settle();
     }
 
-    return {getDiceTableRequestRows, getStatsRequestRows, submitDiceTableRequest, submitStatsRequest};
+    return {getDiceTableRequestRows, getStatsRequestRows, typeInto, submitDiceTableRequest, submitStatsRequest};
 }
 
 async function settle() {

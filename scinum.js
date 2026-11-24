@@ -1,11 +1,16 @@
 class SciNum {
+    /**
+     * @param {number | string} mantissa
+     * @param {number | string} power
+     */
     constructor(mantissa, power) {
-        this.mantissa = parseFloat(mantissa);
+        this.mantissa = parseFloat(String(mantissa));
         this.power = (this.mantissa === 0 || this.mantissa === Infinity || this.mantissa === -Infinity) ?
-            0 : parseFloat(power);
+            0 : parseFloat(String(power));
         this.sigFigs = 4;
     }
 
+    /** @param {SciNum} other */
     div(other) {
         let newMantissa = this.mantissa / other.mantissa;
         let newPow = this.power - other.power;
@@ -16,6 +21,7 @@ class SciNum {
         return new SciNum(newMantissa, newPow);
     }
 
+    /** @param {SciNum} other */
     mul(other) {
         let newMantissa = this.mantissa * other.mantissa;
         let newPow = this.power + other.power;
@@ -73,10 +79,12 @@ class SciNum {
     }
 }
 
+/** @param {number} num */
 function toSignedStr(num) {
     return (num < 0 ? "" : "+") + num;
 }
 
+/** @param {SciNum[]} sciNumArray */
 function sumSciNum(sciNumArray) {
     let maxPow = maxPower(sciNumArray);
     const maxPowerDiff = 15;
@@ -99,6 +107,7 @@ function sumSciNum(sciNumArray) {
     return new SciNum(newMantissa, maxPow);
 }
 
+/** @param {SciNum[]} sciNumArray */
 function maxPower(sciNumArray) {
     return Math.max(...sciNumArray.map(el => el.power));
 }
