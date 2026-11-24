@@ -84,7 +84,8 @@ render.</p>
         <code>MIN</code> or <code>MAX</code>.</li>
     <li>The user can still step a value by 1, as the number spinner allows today. Pressing − on a box holding the
         lowest roll changes it to <code>MIN</code>, and pressing + on a box holding the highest roll changes it to
-        <code>MAX</code>, so the buttons can get back to following.</li>
+        <code>MAX</code>, so the buttons can get back to following. Pressing + on <code>MIN</code> pins the lowest
+        roll, and pressing − on <code>MAX</code> pins the highest roll.</li>
 </ol>
 <p><strong>Out of scope:</strong> the Lambda API, dice table requests, colors and shift indexes, the roller, and the
 summary rows (Range, Mean, Std dev).</p>
@@ -101,10 +102,10 @@ summary rows (Range, Mean, Std dev).</p>
         <td>Trims the text. <code>min</code>/<code>max</code> in any case give <code>'MIN'</code>/<code>'MAX'</code>,
             and a whole number gives that number. Anything else gives <code>null</code>.</td></tr>
     <tr><td><code>stepRollBound(text, delta, rollLimits)</code></td><td><code>string</code>: the new box text</td>
-        <td>A number becomes number + <code>delta</code>. <code>MIN</code> and <code>MAX</code> step from the roll they
-            stand for: <code>MIN</code> + 1 gives lowest + 1, and <code>MAX</code> − 1 gives highest − 1. Unparseable
+        <td>A number becomes number + <code>delta</code>. <code>MIN</code> and <code>MAX</code> step from just outside
+            the rolls: <code>MIN</code> + 1 gives the lowest roll, and <code>MAX</code> − 1 gives the highest. Unparseable
             text, and <code>MIN</code>/<code>MAX</code> while <code>rollLimits</code> is <code>null</code>, come back
-            unchanged. It doesn't snap: <code>MIN</code> − 1 returns lowest − 1, and the render that follows snaps that
+            unchanged. It doesn't snap: <code>MIN</code> − 1 returns lowest − 2, and the render that follows snaps that
             back to <code>MIN</code>.</td></tr>
 </table></div>
 
@@ -241,8 +242,8 @@ rule, and the plot and table layout.</p>
             <li><code>snapToRollLimits</code> keeps an in-range number.</li>
             <li><code>stepRollBound</code> adds 1 to a number.</li>
             <li><code>stepRollBound</code> subtracts 1 from a number.</li>
-            <li><code>stepRollBound</code> steps up from <code>MIN</code> to lowest + 1.</li>
-            <li><code>stepRollBound</code> steps down from <code>MAX</code> to highest − 1.</li>
+            <li><code>stepRollBound</code> steps up from <code>MIN</code> to the lowest roll.</li>
+            <li><code>stepRollBound</code> steps down from <code>MAX</code> to the highest roll.</li>
             <li><code>stepRollBound</code> leaves unparseable text unchanged.</li>
             <li><code>stepRollBound</code> leaves <code>MIN</code> unchanged when no tables are loaded.</li>
         </ul>
@@ -275,6 +276,8 @@ rule, and the plot and table layout.</p>
             <li>+ on a box holding the highest roll changes it to <code>MAX</code>.</li>
             <li>− on a box holding <code>MIN</code> leaves <code>MIN</code>.</li>
             <li>+ on a box holding <code>MAX</code> leaves <code>MAX</code>.</li>
+            <li>+ on a box holding <code>MIN</code> pins it to the lowest roll.</li>
+            <li>− on a box holding <code>MAX</code> pins it to the highest roll.</li>
             <li>Stepping doesn't recalculate the stats row.</li>
         </ul>
     </li>
@@ -292,7 +295,8 @@ rule, and the plot and table layout.</p>
             <li>Load <code>Die(6)</code>. Stats shows <code>MIN</code>/<code>MAX</code>, and Calculate gives
                 <code>1 to 6</code>, 100%.</li>
             <li>Add <code>3*Die(6)</code>. The row becomes <code>1 to 18</code> without submitting again.</li>
-            <li>Press + on From: it shows 2. Press − twice: it shows 1, then <code>MIN</code>.</li>
+            <li>Press + on From: it shows 1. Press + again: it shows 2. Press − twice: it shows 1, then
+                <code>MIN</code>.</li>
             <li>Set From to <code>4</code> and Calculate, then remove <code>Die(6)</code>. From stays 4. Set From to
                 <code>1</code> and Calculate: it snaps to <code>MIN</code>.</li>
             <li>At phone width, each "From − [box] +" group stays together when the row wraps.</li>
@@ -315,7 +319,9 @@ rule, and the plot and table layout.</p>
         faking one with a stand-in number and an overlay was ruled out. It would fight the browser, the stand-in
         number would move whenever the tables change, and screen readers would read the wrong value.</li>
     <li><strong>Stepping past the lowest or highest roll gives <code>MIN</code>/<code>MAX</code>.</strong> − on the
-        lowest roll becomes <code>MIN</code>, and + on the highest roll becomes <code>MAX</code>.
+        lowest roll becomes <code>MIN</code>, and + on the highest roll becomes <code>MAX</code>. Going the other way,
+        + on <code>MIN</code> pins the lowest roll and − on <code>MAX</code> pins the highest, so <code>MIN</code>
+        and the lowest roll are one step apart.
         <code>stepRollBound</code> doesn't snap itself; the render after the step does. So no button needs disabling,
         and there's only one snap rule.</li>
     <li><strong>Stepping doesn't recalculate,</strong> matching the spinner today. Calculate still does.</li>

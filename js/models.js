@@ -153,7 +153,8 @@ function parseRollBound(text) {
 }
 
 /**
- * Does not snap: MIN - 1 gives the lowest roll - 1, and the next render snaps that back to MIN.
+ * MIN and MAX step from just outside the rolls: MIN + 1 gives the lowest roll, and MAX - 1 the highest.
+ * Does not snap: MIN - 1 gives the lowest roll - 2, and the next render snaps that back to MIN.
  * @param {string} text the box text
  * @param {number} delta
  * @param {RollRange | null} rollLimits the rolls the loaded dice tables can make, or null when none are loaded
@@ -167,7 +168,8 @@ function stepRollBound(text, delta, rollLimits) {
     if (bound === null || rollLimits === null) {
         return text;
     }
-    return String(resolveRollBound(bound, rollLimits) + delta);
+    const justOutsideTheRolls = bound === 'MIN' ? rollLimits.low - 1 : rollLimits.high + 1;
+    return String(justOutsideTheRolls + delta);
 }
 
 /**

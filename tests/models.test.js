@@ -178,12 +178,12 @@ test('stepRollBound subtracts 1 from a number', () => {
     assert.strictEqual(stepRollBound('7', -1, rollLimits), '6');
 });
 
-test('stepRollBound steps up from MIN to the lowest roll + 1', () => {
-    assert.strictEqual(stepRollBound('MIN', 1, rollLimits), '4');
+test('stepRollBound steps up from MIN to the lowest roll', () => {
+    assert.strictEqual(stepRollBound('MIN', 1, rollLimits), '3');
 });
 
-test('stepRollBound steps down from MAX to the highest roll - 1', () => {
-    assert.strictEqual(stepRollBound('MAX', -1, rollLimits), '17');
+test('stepRollBound steps down from MAX to the highest roll', () => {
+    assert.strictEqual(stepRollBound('MAX', -1, rollLimits), '18');
 });
 
 test('stepRollBound leaves unparseable text unchanged', () => {

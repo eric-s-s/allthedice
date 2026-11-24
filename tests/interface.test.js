@@ -547,6 +547,22 @@ test('+ on a box holding MAX leaves MAX', async () => {
     assert.strictEqual(statsRequest.elements.high.value, 'MAX');
 });
 
+test('+ on a box holding MIN pins it to the lowest roll', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    statsRequest.elements.lowUp.click();
+    assert.strictEqual(statsRequest.elements.low.value, '1');
+});
+
+test('- on a box holding MAX pins it to the highest roll', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    statsRequest.elements.highDown.click();
+    assert.strictEqual(statsRequest.elements.high.value, '6');
+});
+
 test('stepping does not recalculate the stats row', async () => {
     const page = await openPageWithKnownTables();
     await loadDiceTable(page, 'Die(6)');
