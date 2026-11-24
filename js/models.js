@@ -166,17 +166,21 @@ function parseRollBound(text) {
 /**
  * MIN and MAX step from just outside the rolls: MIN + 1 gives the lowest roll, and MAX - 1 the highest.
  * Does not snap: MIN - 1 gives the lowest roll - 2, and the next render snaps that back to MIN.
+ * Empty or half-typed text, like - or ma, becomes MIN.
  * @param {string} text the box text
  * @param {number} delta
  * @param {RollRange | null} rollLimits the rolls the loaded dice tables can make, or null when none are loaded
- * @returns {string} the new box text; unchanged when the text is unparseable, or MIN/MAX with no rollLimits
+ * @returns {string} the new box text; MIN when the text is unparseable, and unchanged for MIN/MAX with no rollLimits
  */
 function stepRollBound(text, delta, rollLimits) {
     const bound = parseRollBound(text);
     if (typeof bound === 'number') {
         return String(bound + delta);
     }
-    if (bound === null || rollLimits === null) {
+    if (bound === null) {
+        return 'MIN';
+    }
+    if (rollLimits === null) {
         return text;
     }
     const justOutsideTheRolls = bound === 'MIN' ? rollLimits.low - 1 : rollLimits.high + 1;

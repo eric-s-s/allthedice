@@ -207,8 +207,10 @@ test('stepRollBound steps down from MAX to the highest roll', () => {
     assert.strictEqual(stepRollBound('MAX', -1, rollLimits), '18');
 });
 
-test('stepRollBound leaves unparseable text unchanged', () => {
-    assert.strictEqual(stepRollBound('3a', 1, rollLimits), '3a');
+test('stepRollBound turns empty or half-typed text into MIN', () => {
+    for (const text of ['', '-', 'mi', 'ma']) {
+        assert.strictEqual(stepRollBound(text, 1, rollLimits), 'MIN', text);
+    }
 });
 
 test('stepRollBound leaves MIN unchanged when no tables are loaded', () => {

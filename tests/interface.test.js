@@ -565,6 +565,15 @@ test('+ on a box holding the highest roll changes it to MAX', async () => {
     assert.strictEqual(statsRequest.elements.high.value, 'MAX');
 });
 
+test('stepping an empty box changes it to MIN', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.high, '');
+    statsRequest.elements.highUp.click();
+    assert.strictEqual(statsRequest.elements.high.value, 'MIN');
+});
+
 test('- on a box holding MIN leaves MIN', async () => {
     const page = await openPageWithKnownTables();
     await loadDiceTable(page, 'Die(6)');
