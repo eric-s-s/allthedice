@@ -6,14 +6,15 @@ document.addEventListener('DOMContentLoaded', onPageLoad);
  * @property {() => void} remove
  */
 
+/** @typedef {RequestActions & {step: (bound: 'low' | 'high', delta: number) => void}} StatsRequestActions */
+
 /**
  * @typedef {object} StatsCell
- * @property {SubmittedStatsRequest} statsRequest
  * @property {LoadedDiceTableRequest} diceTableRequest
  * @property {ReturnType<typeof getStats>} stats
  */
 
-/** @typedef {{statsRequest: SubmittedStatsRequest, cells: StatsCell[]}} StatsRow */
+/** @typedef {{statsRequest: SubmittedStatsRequest, range: RollRange, cells: StatsCell[]}} StatsRow */
 
 class DiceTableRequestView {
     /**
@@ -54,12 +55,21 @@ class DiceTableRequestView {
 class StatsRequestView {
     /**
      * @param {StatsRequest} model
-     * @param {RequestActions} actions
+     * @param {StatsRequestActions} actions
      */
     constructor(model, actions) {
         this.element = /** @type {HTMLFormElement} */ (cloneTemplate('statsRequestTemplate'));
         this.low = /** @type {HTMLInputElement} */ (this.element.elements.namedItem('low'));
         this.high = /** @type {HTMLInputElement} */ (this.element.elements.namedItem('high'));
+
+        /** @type {[string, 'low' | 'high', number][]} */
+        const stepButtons = [
+            ['lowDown', 'low', -1], ['lowUp', 'low', 1], ['highDown', 'high', -1], ['highUp', 'high', 1],
+        ];
+        for (const [name, bound, delta] of stepButtons) {
+            const button = /** @type {HTMLButtonElement} */ (this.element.elements.namedItem(name));
+            button.addEventListener('click', () => actions.step(bound, delta));
+        }
 
         this.low.addEventListener('input', () => {
             model.lowInput = this.low.value;
@@ -74,20 +84,8 @@ class StatsRequestView {
         findElement(this.element, '.remove').addEventListener('click', actions.remove);
     }
 
-    /**
-     * @param {StatsRequest} model
-     * @param {RollRange | null} rollLimits the rolls the loaded dice tables can make, or null when none are loaded
-     */
-    update(model, rollLimits) {
-        for (const input of [this.low, this.high]) {
-            if (rollLimits === null) {
-                input.removeAttribute('min');
-                input.removeAttribute('max');
-            } else {
-                input.min = String(rollLimits.low);
-                input.max = String(rollLimits.high);
-            }
-        }
+    /** @param {StatsRequest} model */
+    update(model) {
         setInputValue(this.low, model.lowInput);
         setInputValue(this.high, model.highInput);
     }
@@ -207,25 +205,33 @@ function onPageLoad() {
         render();
     }
 
-    /** @param {RollRange} rollLimits */
-    function fillBlankStatsInputs(rollLimits) {
-        state.statsRequests.forEach(statsRequest => {
-            if (statsRequest.lowInput === '') {
-                statsRequest.lowInput = String(rollLimits.low);
-            }
-            if (statsRequest.highInput === '') {
-                statsRequest.highInput = String(rollLimits.high);
-            }
-        });
+    /**
+     * Changes the box only; Calculate recalculates.
+     * @param {StatsRequest} statsRequest
+     * @param {'low' | 'high'} bound
+     * @param {number} delta
+     */
+    function stepStatsRequest(statsRequest, bound, delta) {
+        const rollLimits = getRollLimits();
+        if (bound === 'low') {
+            statsRequest.lowInput = stepRollBound(statsRequest.lowInput, delta, rollLimits);
+        } else {
+            statsRequest.highInput = stepRollBound(statsRequest.highInput, delta, rollLimits);
+        }
+        render();
+    }
+
+    /** @returns {RollRange | null} the rolls the loaded dice tables can make, or null when none are loaded */
+    function getRollLimits() {
+        const loadedDiceTableRequests = state.diceTableRequests.filter(isLoadedDiceTableRequest);
+        return loadedDiceTableRequests.length === 0 ? null : getLowestAndHighestRolls(loadedDiceTableRequests);
     }
 
     function render() {
         const loadedDiceTableRequests = state.diceTableRequests.filter(isLoadedDiceTableRequest);
-        const rollLimits = loadedDiceTableRequests.length === 0
-            ? null
-            : getLowestAndHighestRolls(loadedDiceTableRequests);
+        const rollLimits = getRollLimits();
         if (rollLimits !== null) {
-            fillBlankStatsInputs(rollLimits);
+            state.statsRequests.forEach(statsRequest => statsRequest.snapToRollLimits(rollLimits));
         }
 
         syncViews(
@@ -245,11 +251,12 @@ function onPageLoad() {
             model => new StatsRequestView(model, {
                 submit: () => submitStatsRequest(model),
                 remove: () => removeStatsRequest(model),
+                step: (bound, delta) => stepStatsRequest(model, bound, delta),
             }),
-            (view, model) => view.update(model, rollLimits),
+            (view, model) => view.update(model),
         );
 
-        const statsRows = getStatsRows(loadedDiceTableRequests);
+        const statsRows = getStatsRows(loadedDiceTableRequests, rollLimits);
         renderPlot(loadedDiceTableRequests, statsRows);
         renderStatsTable(loadedDiceTableRequests, statsRows);
         renderRoller(loadedDiceTableRequests);
@@ -257,15 +264,20 @@ function onPageLoad() {
 
     /**
      * @param {LoadedDiceTableRequest[]} loadedDiceTableRequests
+     * @param {RollRange | null} rollLimits the rolls the loaded dice tables can make, or null when none are loaded
      * @returns {StatsRow[]}
      */
-    function getStatsRows(loadedDiceTableRequests) {
+    function getStatsRows(loadedDiceTableRequests, rollLimits) {
+        if (rollLimits === null) {
+            return [];
+        }
         return state.statsRequests.filter(isSubmittedStatsRequest).map(statsRequest => {
-            const rolls = getEveryRollFrom(statsRequest.submittedRange.low, statsRequest.submittedRange.high);
+            const range = statsRequest.resolveRange(rollLimits);
+            const rolls = getEveryRollFrom(range.low, range.high);
             return {
                 statsRequest,
+                range,
                 cells: loadedDiceTableRequests.map(diceTableRequest => ({
-                    statsRequest,
                     diceTableRequest,
                     stats: getStats(diceTableRequest.diceTable.forSciNum, rolls),
                 })),
@@ -341,17 +353,17 @@ function renderPlot(loadedDiceTableRequests, statsRows) {
         line: {color: getTraceColor(colorIndex)},
         marker: {color: getTraceColor(colorIndex)},
     }));
-    statsRows.flatMap(({cells}) => cells).forEach(({statsRequest, diceTableRequest, stats}) => {
-        const {low, high} = statsRequest.submittedRange;
-        const {diceTable, colorIndex} = diceTableRequest;
-        traces.push({
-            ...getStatsFillTrace(low, high, diceTable.data),
-            type: 'scatter',
-            mode: 'none',
-            fill: 'tozeroy',
-            fillcolor: getStatsFillColor(colorIndex, statsRequest.shiftIndex),
-            hoverinfo: 'skip',
-            name: getStatsTraceName(diceTable.diceList, low, high, stats.pctChance),
+    statsRows.forEach(({statsRequest, range: {low, high}, cells}) => {
+        cells.forEach(({diceTableRequest: {diceTable, colorIndex}, stats}) => {
+            traces.push({
+                ...getStatsFillTrace(low, high, diceTable.data),
+                type: 'scatter',
+                mode: 'none',
+                fill: 'tozeroy',
+                fillcolor: getStatsFillColor(colorIndex, statsRequest.shiftIndex),
+                hoverinfo: 'skip',
+                name: getStatsTraceName(diceTable.diceList, low, high, stats.pctChance),
+            });
         });
     });
 
@@ -417,9 +429,9 @@ function renderStatsTable(loadedDiceTableRequests, statsRows) {
         return row;
     });
 
-    statsRows.forEach(({statsRequest, cells}) => {
+    statsRows.forEach(({range, cells}) => {
         const row = document.createElement('tr');
-        row.append(makeElement('th', getRangeLabel(statsRequest.submittedRange.low, statsRequest.submittedRange.high)));
+        row.append(makeElement('th', getRangeLabel(range.low, range.high)));
         cells.forEach(({stats}) => {
             const cell = makeElement('td', stats.pctChance + '%');
             const oneInChance = makeElement('span', '1 in ' + stats.oneInChance);
