@@ -231,9 +231,10 @@ keep values.</p>
  * @typedef {object} DiceBuilderSession
  * @property {DiceTableRequest} diceTableRequest the row that Done writes to
  * @property {DiceBuilder} builder
- * @property {string} replacedText the row's text when it could not be parsed; '' otherwise
+ * @property {string} unreadableText the row's text when the builder could not read it, so Done will discard it;
+ *     '' otherwise
  */</code></pre>
-<p><code>AppState</code> gets <code>diceBuilder: DiceBuilderSession | null</code>, which starts as
+<p><code>AppState</code> gets <code>diceBuilderSession: DiceBuilderSession | null</code>, which starts as
 <code>null</code>. While it isn't <code>null</code>, the modal is open.</p>
 
 <h2 id="views">4. Views</h2>
@@ -248,8 +249,8 @@ keep values.</p>
         <ol>
             <li>A header with <code>&lt;h2 id="diceBuilderTitle"&gt;Build a dice collection&lt;/h2&gt;</code> and an
                 <code>.iconButton</code> close button (×).</li>
-            <li>A replace note, <code>&lt;p class="builderReplaceNote" hidden&gt;</code>: "Done will replace
-                <code>…</code>", filled with <code>replacedText</code>.</li>
+            <li>An unreadable note, <code>&lt;p class="builderUnreadableNote" hidden&gt;</code>: "Done will replace
+                <code>…</code>", filled with <code>unreadableText</code>.</li>
             <li><b>Add a die:</b> the seven preset buttons, each with <code>data-sides</code>.</li>
             <li><b>Custom die:</b> a kind <code>&lt;select&gt;</code>, a Sides box, a Modifier box (shown for
                 <code>ModDie</code> and <code>ModWeightedDie</code>), a weights area (shown for the weighted kinds) with
@@ -305,18 +306,27 @@ keep values.</p>
 <p>One instance, made in <code>onPageLoad</code> around the static dialog.</p>
 <pre><code>/**
  * @typedef {object} DiceBuilderActions
- * @property {() => void} change  a box, select or button changed the builder
  * @property {() => void} done
  * @property {() => void} cancel
  */</code></pre>
+<p>The constructor takes <code>getSession</code> (<code>() =&gt; state.diceBuilderSession</code>) and these actions.
+<code>interface.js</code> only hears about Done and Cancel. Edits inside the modal stay inside the view.</p>
 <ul>
-    <li>The constructor attaches the listeners for the fixed controls. Each one changes
-        <code>session.builder</code> (looked up through a getter, because the session changes on every open) and then
-        calls <code>actions.change()</code>. Preset and Add buttons, the custom die form and the collection modifier
-        steppers (through <code>onPressAndHold</code>) work this way.</li>
-    <li>Part rows are kept in a <code>Map</code> and synced with <code>syncViews</code> by part id. Each row's
-        listeners write to its <code>BuilderPart</code> or call <code>stepCount</code> / <code>removePart</code>, then
-        call <code>actions.change()</code>.</li>
+    <li><code>getOpenSession()</code> returns the open session, looked up through <code>getSession</code> on every
+        call because each open makes a new one. It throws when the modal is closed, since the controls can't be
+        reached then.</li>
+    <li>Every listener does two steps in order: it edits the session's builder, then calls
+        <code>update(session)</code>. Only the modal shows the builder, so the plot, stats and roller aren't redrawn,
+        and Plotly doesn't re-plot on every keystroke.</li>
+    <li>The constructor attaches the listeners for the fixed controls: the presets, the custom die form, Add custom
+        die, and the collection modifier box and steppers (through <code>onPressAndHold</code>).</li>
+    <li>Every listener in the modal lives in <code>DiceBuilderView</code>. Part rows are kept in a
+        <code>Map</code> and synced with <code>syncViews</code> by part id. A <code>BuilderPartView</code> only
+        draws: its constructor clones the template and sets the labels, and <code>update(part)</code> writes the
+        boxes. <code>makePartView(part)</code> makes the row and attaches its listeners the same way as the
+        constructor's: the boxes and wrapper select write to the part, and the step and remove buttons call
+        <code>stepCount</code> / <code>removePart</code>. Nothing is passed down into a row, so a row never calls
+        back into the modal.</li>
     <li>The weight boxes are synced by index. The view adds or removes boxes until the count matches
         <code>weightInputs.length</code>, so a focused box keeps its focus.</li>
     <li>The dialog's <code>cancel</code> event (Escape) calls <code>preventDefault()</code> and then
@@ -330,7 +340,7 @@ keep values.</p>
             <li>Otherwise: if the dialog is closed, it calls <code>showModal()</code>. The first preset (D4) has
                 <code>autofocus</code>. Then it writes every box with <code>setInputValue</code>, shows and hides the
                 kind and wrapper fields, sets <code>aria-invalid</code> on each box that breaks a limit, fills the
-                preview and replace note, and disables Done when <code>toBuildString()</code> is <code>null</code> or
+                preview and unreadable note, and disables Done when <code>toBuildString()</code> is <code>null</code> or
                 <code>''</code>.</li>
         </ul>
     </li>
@@ -341,19 +351,16 @@ keep values.</p>
 <ul>
     <li><strong>Open:</strong> <code>build</code> for a row runs
         <code>parseBuildString(request.buildStringInput)</code>. If it gets a builder, the session uses it with
-        <code>replacedText: ''</code>. If it gets <code>null</code>, the session uses <code>new DiceBuilder()</code>
-        with <code>replacedText</code> set to the trimmed text. Then it calls <code>render()</code>.</li>
-    <li><strong>Change:</strong> calls <code>diceBuilderView.update(state.diceBuilder)</code> only, not
-        <code>render()</code>. Typing in the builder doesn't touch the plot, stats or roller, and Plotly doesn't
-        re-plot on every keystroke.</li>
+        <code>unreadableText: ''</code>. If it gets <code>null</code>, the session uses <code>new DiceBuilder()</code>
+        with <code>unreadableText</code> set to the trimmed text. Then it calls <code>render()</code>.</li>
     <li><strong>Done:</strong> sets <code>request.buildStringInput</code> to <code>toBuildString()</code>, sets
-        <code>state.diceBuilder</code> to <code>null</code>, calls <code>render()</code> to close the dialog, and then
-        calls <code>getDiceTable(request)</code>. Rendering first matters because <code>getDiceTable</code> returns
+        <code>state.diceBuilderSession</code> to <code>null</code>, calls <code>render()</code> to close the dialog, and
+        then calls <code>getDiceTable(request)</code>. Rendering first matters because <code>getDiceTable</code> returns
         without rendering when the request is already pending. Done does nothing when the build string is
         <code>null</code> or <code>''</code> (the button is disabled anyway).</li>
-    <li><strong>Cancel:</strong> sets <code>state.diceBuilder</code> to <code>null</code> and calls
+    <li><strong>Cancel:</strong> sets <code>state.diceBuilderSession</code> to <code>null</code> and calls
         <code>render()</code>.</li>
-    <li><code>render()</code> calls <code>diceBuilderView.update(state.diceBuilder)</code> after the request
+    <li><code>render()</code> calls <code>diceBuilderView.update(state.diceBuilderSession)</code> after the request
         views.</li>
     <li>The rest of the page is inert while the modal is open, so the row can't be removed or resubmitted under an
         open session.</li>
@@ -465,9 +472,9 @@ file is already long.</p>
 <ul>
     <li>Each dice collection row has a Build button.</li>
     <li>Build opens the builder.</li>
-    <li>Build on a blank row opens an empty builder with no replace note.</li>
+    <li>Build on a blank row opens an empty builder with no unreadable note.</li>
     <li>Build on a row with text the builder wrote opens with those parts.</li>
-    <li>Build on a row with text the builder can't read shows the replace note and starts empty.</li>
+    <li>Build on a row with text the builder can't read shows the unreadable note and starts empty.</li>
     <li>Clicking D6 twice previews <code>2*Die(6)</code>.</li>
     <li>Choosing Best of pool shows the Pool and Keep boxes.</li>
     <li>Choosing WeightedDie with 4 sides shows four weight boxes.</li>
@@ -492,7 +499,7 @@ file is already long.</p>
         <ol>
             <li>Build → D6, D6, D20 → Done. The row reads <code>2*Die(6)&amp;Die(20)</code> and calculates.</li>
             <li>Build on the same row. It opens with both parts. Set the D20 to Best of pool, 2, 1 → Done.</li>
-            <li>Type <code>Die(6)+3</code> into a row and press Build. The replace note shows. Press Escape, and the
+            <li>Type <code>Die(6)+3</code> into a row and press Build. The unreadable note shows. Press Escape, and the
                 text is unchanged.</li>
             <li>Custom ModWeightedDie with 3 sides, weights 1/0/2 and modifier −1 previews
                 <code>ModWeightedDie({1: 1, 3: 2}, -1)</code>.</li>

@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', onPageLoad);
 
 function onPageLoad() {
     /** @type {AppState} */
-    const state = {diceTableRequests: [], statsRequests: [], diceBuilder: null};
+    const state = {diceTableRequests: [], statsRequests: [], diceBuilderSession: null};
     window.allTheDice = {state};
 
     /** @type {Map<string, DiceTableRequestView>} */
@@ -23,12 +23,10 @@ function onPageLoad() {
     setUpPanels();
     setUpMenus();
 
-    const diceBuilderView = new DiceBuilderView(() => state.diceBuilder, {
-        // only the builder changed, so the plot, stats and roller are left alone
-        change: () => diceBuilderView.update(state.diceBuilder),
+    const diceBuilderView = new DiceBuilderView(() => state.diceBuilderSession, {
         done: finishDiceBuilder,
         cancel: () => {
-            state.diceBuilder = null;
+            state.diceBuilderSession = null;
             render();
         },
     });
@@ -103,20 +101,20 @@ function onPageLoad() {
     /** @param {DiceTableRequest} diceTableRequest */
     function openDiceBuilder(diceTableRequest) {
         const builder = parseBuildString(diceTableRequest.buildStringInput);
-        state.diceBuilder = builder === null
-            ? {diceTableRequest, builder: new DiceBuilder(), replacedText: diceTableRequest.buildStringInput.trim()}
-            : {diceTableRequest, builder, replacedText: ''};
+        state.diceBuilderSession = builder === null
+            ? {diceTableRequest, builder: new DiceBuilder(), unreadableText: diceTableRequest.buildStringInput.trim()}
+            : {diceTableRequest, builder, unreadableText: ''};
         render();
     }
 
     function finishDiceBuilder() {
-        const session = state.diceBuilder;
+        const session = state.diceBuilderSession;
         const buildString = session?.builder.toBuildString();
         if (!session || !buildString) {
             return;
         }
         session.diceTableRequest.buildStringInput = buildString;
-        state.diceBuilder = null;
+        state.diceBuilderSession = null;
         render();
         getDiceTable(session.diceTableRequest);
     }
@@ -193,7 +191,7 @@ function onPageLoad() {
             }),
             (view, model) => view.update(model),
         );
-        diceBuilderView.update(state.diceBuilder);
+        diceBuilderView.update(state.diceBuilderSession);
 
         const statsRows = getStatsRows(loadedDiceTableRequests, rollLimits);
         renderPlot(loadedDiceTableRequests, statsRows);

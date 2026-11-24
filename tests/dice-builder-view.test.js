@@ -44,11 +44,11 @@ test('Build opens the builder', async () => {
     assert.ok(page.openBuilder(getFirstRow(page)).open);
 });
 
-test('Build on a blank row opens an empty builder with no replace note', async () => {
+test('Build on a blank row opens an empty builder with no unreadable note', async () => {
     const page = await openPageWithDie6();
     const builder = page.openBuilder(getFirstRow(page));
     assert.deepStrictEqual(getPartLabels(builder), []);
-    assert.ok(builder.querySelector('.builderReplaceNote').hidden);
+    assert.ok(builder.querySelector('.builderUnreadableNote').hidden);
 });
 
 test('Build on a row with text the builder wrote opens with those parts', async () => {
@@ -58,11 +58,11 @@ test('Build on a row with text the builder wrote opens with those parts', async 
     assert.deepStrictEqual(getPartLabels(builder), ['Die(6)', 'Die(8)']);
 });
 
-test('Build on a row with text the builder cannot read shows the replace note and starts empty', async () => {
+test('Build on a row with text the builder cannot read shows the unreadable note and starts empty', async () => {
     const page = await openPageWithDie6();
     page.typeInto(getFirstRow(page).elements.buildString, 'ExplodingOn(Die(6), (1, ))');
     const builder = page.openBuilder(getFirstRow(page));
-    const note = builder.querySelector('.builderReplaceNote');
+    const note = builder.querySelector('.builderUnreadableNote');
     assert.ok(!note.hidden);
     assert.strictEqual(note.querySelector('code').textContent, 'ExplodingOn(Die(6), (1, ))');
     assert.deepStrictEqual(getPartLabels(builder), []);

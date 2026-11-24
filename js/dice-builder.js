@@ -12,7 +12,8 @@
  * @typedef {object} DiceBuilderSession
  * @property {DiceTableRequest} diceTableRequest the row that Done writes to
  * @property {DiceBuilder} builder
- * @property {string} replacedText the row's text when it could not be parsed; '' otherwise
+ * @property {string} unreadableText the row's text when the builder could not read it, so Done will discard it;
+ *     '' otherwise
  */
 
 /** a weighted die gets one weight box per side, so its sides are capped */
@@ -404,6 +405,7 @@ class TokenReader {
     /**
      * @param {number} [min]
      * @param {number} [max]
+     * @returns {number} the whole number, after stepping past it
      */
     readWholeNumber(min = -Infinity, max = Infinity) {
         if (!this.nextIsWholeNumber()) {
@@ -417,6 +419,7 @@ class TokenReader {
         return number;
     }
 
+    /** @returns {string} the name, after stepping past it */
     readName() {
         const name = this.tokens[this.index] ?? '';
         if (!/^[A-Za-z]+$/.test(name)) {

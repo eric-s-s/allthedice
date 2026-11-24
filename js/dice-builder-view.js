@@ -1,18 +1,16 @@
 /**
  * @typedef {object} DiceBuilderActions
- * @property {() => void} change a box, select or button changed the builder
  * @property {() => void} done
  * @property {() => void} cancel
  */
 
 /**
- * @typedef {object} BuilderPartActions
- * @property {() => void} change
- * @property {(delta: number) => void} stepCount
- * @property {() => void} remove
+ * The one modal dice builder. Only update opens and closes it.
+ *
+ * Every listener in the modal lives in this class, including the part rows' listeners (see makePartView); the rows
+ * only draw. Each listener looks up the open session, edits its builder, then calls update(session), which redraws
+ * only the modal: nothing else on the page shows the builder, so the plot, stats and roller are left alone.
  */
-
-/** The one modal dice builder. Only update opens and closes it. */
 class DiceBuilderView {
     /**
      * @param {() => DiceBuilderSession | null} getSession
@@ -21,8 +19,8 @@ class DiceBuilderView {
     constructor(getSession, actions) {
         this.element = /** @type {HTMLDialogElement} */ (getElement('diceBuilder'));
         this.body = findElement(this.element, '.builderBody');
-        this.replaceNote = findElement(this.element, '.builderReplaceNote');
-        this.replacedText = findElement(this.replaceNote, 'code');
+        this.unreadableNote = findElement(this.element, '.builderUnreadableNote');
+        this.unreadableTextElement = findElement(this.unreadableNote, 'code');
         this.customKind = /** @type {HTMLSelectElement} */ (findNamed(this.element, 'customKind'));
         this.customSides = /** @type {HTMLInputElement} */ (findNamed(this.element, 'customSides'));
         this.customModifierLabel = findElement(this.element, '.builderCustomModifier');
@@ -36,51 +34,56 @@ class DiceBuilderView {
         this.done = /** @type {HTMLButtonElement} */ (findNamed(this.element, 'done'));
         /** @type {Map<string, BuilderPartView>} */
         this.partViews = new Map();
-        this.actions = actions;
-        this.getBuilder = () => {
-            const session = getSession();
-            if (session === null) {
-                throw new Error('The dice builder is not open.');
-            }
-            return session.builder;
-        };
-
-        /** @param {(builder: DiceBuilder) => void} change */
-        const changeBuilder = change => {
-            change(this.getBuilder());
-            actions.change();
-        };
+        this.getSession = getSession;
 
         this.element.querySelectorAll('[data-sides]').forEach(element => {
             const button = /** @type {HTMLButtonElement} */ (element);
-            button.addEventListener('click', () => changeBuilder(builder => {
-                builder.addPreset(Number(button.dataset.sides));
-            }));
-        });
-        this.customKind.addEventListener('change', () => changeBuilder(builder => {
-            builder.draft.kind = /** @type {BuilderDieKind} */ (this.customKind.value);
-        }));
-        this.customSides.addEventListener('input', () => changeBuilder(builder => {
-            builder.draft.setSides(this.customSides.value);
-        }));
-        this.customModifier.addEventListener('input', () => changeBuilder(builder => {
-            builder.draft.modifierInput = this.customModifier.value;
-        }));
-        this.weights.addEventListener('input', event => {
-            const input = /** @type {HTMLInputElement} */ (event.target);
-            changeBuilder(builder => {
-                builder.draft.weightInputs[Number(input.dataset.index)] = input.value;
+            button.addEventListener('click', () => {
+                const session = this.getOpenSession();
+                session.builder.addPreset(Number(button.dataset.sides));
+                this.update(session);
             });
         });
-        this.addCustom.addEventListener('click', () => changeBuilder(builder => builder.addCustomDie()));
-        this.modifier.addEventListener('input', () => changeBuilder(builder => {
-            builder.modifierInput = this.modifier.value;
-        }));
+        this.customKind.addEventListener('change', () => {
+            const session = this.getOpenSession();
+            session.builder.draft.kind = /** @type {BuilderDieKind} */ (this.customKind.value);
+            this.update(session);
+        });
+        this.customSides.addEventListener('input', () => {
+            const session = this.getOpenSession();
+            session.builder.draft.setSides(this.customSides.value);
+            this.update(session);
+        });
+        this.customModifier.addEventListener('input', () => {
+            const session = this.getOpenSession();
+            session.builder.draft.modifierInput = this.customModifier.value;
+            this.update(session);
+        });
+        this.weights.addEventListener('input', event => {
+            const input = /** @type {HTMLInputElement} */ (event.target);
+            const session = this.getOpenSession();
+            session.builder.draft.weightInputs[Number(input.dataset.index)] = input.value;
+            this.update(session);
+        });
+        this.addCustom.addEventListener('click', () => {
+            const session = this.getOpenSession();
+            session.builder.addCustomDie();
+            this.update(session);
+        });
+        this.modifier.addEventListener('input', () => {
+            const session = this.getOpenSession();
+            session.builder.modifierInput = this.modifier.value;
+            this.update(session);
+        });
         /** @type {[string, number][]} */
         const modifierSteps = [['modifierDown', -1], ['modifierUp', 1]];
         for (const [name, delta] of modifierSteps) {
             const button = /** @type {HTMLButtonElement} */ (findNamed(this.element, name));
-            onPressAndHold(button, () => changeBuilder(builder => builder.stepModifier(delta)));
+            onPressAndHold(button, () => {
+                const session = this.getOpenSession();
+                session.builder.stepModifier(delta);
+                this.update(session);
+            });
         }
 
         findNamed(this.element, 'close').addEventListener('click', actions.cancel);
@@ -99,6 +102,67 @@ class DiceBuilderView {
         });
     }
 
+    /** @returns {DiceBuilderSession} the open session; throws when the modal is closed */
+    getOpenSession() {
+        const session = this.getSession();
+        if (session === null) {
+            throw new Error('The dice builder is not open.');
+        }
+        return session;
+    }
+
+    /**
+     * Makes a part's row and attaches its listeners. Like the constructor's listeners, each one looks up the open
+     * session, edits it, then updates the modal.
+     * @param {BuilderPart} part
+     */
+    makePartView(part) {
+        const view = new BuilderPartView(part);
+
+        /** @type {[HTMLButtonElement, number][]} */
+        const countSteps = [[view.countDown, -1], [view.countUp, 1]];
+        for (const [button, delta] of countSteps) {
+            onPressAndHold(button, () => {
+                const session = this.getOpenSession();
+                session.builder.stepCount(part.id, delta);
+                this.update(session);
+            });
+        }
+        /** @type {[HTMLInputElement, (text: string) => void][]} */
+        const boxes = [
+            [view.count, text => {
+                part.countInput = text;
+            }],
+            [view.poolSize, text => {
+                part.poolSizeInput = text;
+            }],
+            [view.keep, text => {
+                part.keepInput = text;
+            }],
+            [view.multiplier, text => {
+                part.multiplierInput = text;
+            }],
+        ];
+        for (const [input, write] of boxes) {
+            input.addEventListener('input', () => {
+                const session = this.getOpenSession();
+                write(input.value);
+                this.update(session);
+            });
+        }
+        view.wrapper.addEventListener('change', () => {
+            const session = this.getOpenSession();
+            part.wrapper = /** @type {BuilderWrapper} */ (view.wrapper.value);
+            this.update(session);
+        });
+        view.remove.addEventListener('click', () => {
+            const session = this.getOpenSession();
+            session.builder.removePart(part.id);
+            this.update(session);
+        });
+        return view;
+    }
+
     /** @param {DiceBuilderSession | null} session */
     update(session) {
         if (session === null) {
@@ -107,10 +171,10 @@ class DiceBuilderView {
             }
             return;
         }
-        const {builder, replacedText} = session;
+        const {builder, unreadableText} = session;
 
-        this.replaceNote.hidden = replacedText === '';
-        this.replacedText.textContent = replacedText;
+        this.unreadableNote.hidden = unreadableText === '';
+        this.unreadableTextElement.textContent = unreadableText;
 
         this.updateDraft(builder.draft);
 
@@ -118,17 +182,7 @@ class DiceBuilderView {
             builder.parts,
             this.partViews,
             this.partList,
-            part => new BuilderPartView(part, {
-                change: this.actions.change,
-                stepCount: delta => {
-                    this.getBuilder().stepCount(part.id, delta);
-                    this.actions.change();
-                },
-                remove: () => {
-                    this.getBuilder().removePart(part.id);
-                    this.actions.change();
-                },
-            }),
+            part => this.makePartView(part),
             (view, part) => view.update(part),
         );
         this.partsEmpty.hidden = builder.parts.length > 0;
@@ -180,16 +234,16 @@ class DiceBuilderView {
     }
 }
 
+/** One part's row. It only draws; DiceBuilderView.makePartView attaches its listeners. */
 class BuilderPartView {
-    /**
-     * @param {BuilderPart} part
-     * @param {BuilderPartActions} actions
-     */
-    constructor(part, actions) {
+    /** @param {BuilderPart} part */
+    constructor(part) {
         this.element = cloneTemplate('builderPartTemplate');
         const dieLabel = dieToBuildString(part.die);
         findElement(this.element, '.builderDieLabel').textContent = dieLabel;
+        this.countDown = /** @type {HTMLButtonElement} */ (findNamed(this.element, 'countDown'));
         this.count = /** @type {HTMLInputElement} */ (findNamed(this.element, 'count'));
+        this.countUp = /** @type {HTMLButtonElement} */ (findNamed(this.element, 'countUp'));
         this.wrapper = /** @type {HTMLSelectElement} */ (findNamed(this.element, 'wrapper'));
         this.poolLabels = [...this.element.querySelectorAll('.builderPool')].map(label => /** @type {HTMLElement} */ (
             label));
@@ -197,56 +251,23 @@ class BuilderPartView {
         this.keep = /** @type {HTMLInputElement} */ (findNamed(this.element, 'keep'));
         this.multiplierLabel = findElement(this.element, '.builderStrong');
         this.multiplier = /** @type {HTMLInputElement} */ (findNamed(this.element, 'multiplier'));
-        const remove = findElement(this.element, '.remove');
+        this.remove = /** @type {HTMLButtonElement} */ (findElement(this.element, '.remove'));
 
         /** @type {[HTMLElement, string][]} */
         const labels = [
             [this.count, `Count of ${dieLabel}`],
-            [findNamed(this.element, 'countDown'), `Step count of ${dieLabel} down`],
-            [findNamed(this.element, 'countUp'), `Step count of ${dieLabel} up`],
+            [this.countDown, `Step count of ${dieLabel} down`],
+            [this.countUp, `Step count of ${dieLabel} up`],
             [this.wrapper, `Wrapper for ${dieLabel}`],
             [this.poolSize, `Pool size for ${dieLabel}`],
             [this.keep, `Dice kept from the pool of ${dieLabel}`],
             [this.multiplier, `Multiplier for ${dieLabel}`],
-            [remove, `Remove ${dieLabel}`],
+            [this.remove, `Remove ${dieLabel}`],
         ];
         for (const [element, label] of labels) {
             element.setAttribute('aria-label', label);
         }
-        remove.title = `Remove ${dieLabel}`;
-
-        /** @type {[string, number][]} */
-        const countSteps = [['countDown', -1], ['countUp', 1]];
-        for (const [name, delta] of countSteps) {
-            const button = /** @type {HTMLButtonElement} */ (findNamed(this.element, name));
-            onPressAndHold(button, () => actions.stepCount(delta));
-        }
-        /** @type {[HTMLInputElement, (text: string) => void][]} */
-        const boxes = [
-            [this.count, text => {
-                part.countInput = text;
-            }],
-            [this.poolSize, text => {
-                part.poolSizeInput = text;
-            }],
-            [this.keep, text => {
-                part.keepInput = text;
-            }],
-            [this.multiplier, text => {
-                part.multiplierInput = text;
-            }],
-        ];
-        for (const [input, write] of boxes) {
-            input.addEventListener('input', () => {
-                write(input.value);
-                actions.change();
-            });
-        }
-        this.wrapper.addEventListener('change', () => {
-            part.wrapper = /** @type {BuilderWrapper} */ (this.wrapper.value);
-            actions.change();
-        });
-        remove.addEventListener('click', actions.remove);
+        this.remove.title = `Remove ${dieLabel}`;
     }
 
     /** @param {BuilderPart} part */

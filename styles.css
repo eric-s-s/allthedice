@@ -452,7 +452,7 @@ input[aria-invalid="true"] {
     color: var(--muted);
 }
 
-.builderReplaceNote {
+.builderUnreadableNote {
     margin: 16px 0 0;
     padding: 8px 12px;
     overflow-wrap: anywhere;
