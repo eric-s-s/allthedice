@@ -19,4 +19,6 @@ jobs:
         with:
           node-version: 26
 
+      - run: make lint
+
       - run: make test

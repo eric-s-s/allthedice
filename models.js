@@ -22,7 +22,10 @@
  * @property {StatsRequest[]} statsRequests
  */
 
-/** @typedef {DiceTableRequest & {diceTable: DiceTable, roller: AliasTableRoller, colorIndex: number}} LoadedDiceTableRequest */
+/**
+ * @typedef {DiceTableRequest & {diceTable: DiceTable, roller: AliasTableRoller, colorIndex: number}}
+ *     LoadedDiceTableRequest
+ */
 /** @typedef {StatsRequest & {submittedRange: RollRange, shiftIndex: number}} SubmittedStatsRequest */
 
 class DiceTableRequest {

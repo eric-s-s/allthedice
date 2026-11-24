@@ -1,4 +1,4 @@
-.PHONY: test typecheck cache-bust run-local-dev revert-local-dev
+.PHONY: test typecheck lint cache-bust run-local-dev revert-local-dev
 
 # opens a file in the default browser: xdg-open on Linux, open on macOS
 OPEN := $(shell command -v xdg-open 2>/dev/null || echo open)
@@ -9,6 +9,10 @@ test: typecheck
 # checks the JSDoc types of the app's scripts (see jsconfig.json). emits nothing.
 typecheck: node_modules/.package-lock.json
 	npx tsc -p jsconfig.json
+
+# eslint's recommended rules plus a 120 character line limit (see eslint.config.mjs)
+lint: node_modules/.package-lock.json
+	npx eslint .
 
 # files that index.html links with ?v=<content hash>, so after a deploy browsers fetch the new
 # copy instead of mixing a fresh page with stale cached scripts. tests/cachebust.test.js checks them.

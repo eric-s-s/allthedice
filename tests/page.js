@@ -4,9 +4,13 @@ const vm = require('node:vm');
 const {JSDOM} = require('jsdom');
 
 const repoRoot = path.join(__dirname, '..');
-const pageScripts = ['scinum.js', 'statsmaker.js', 'roller.js', 'plothelpers.js', 'config.js', 'models.js', 'interface.js'];
+const pageScripts = [
+    'scinum.js', 'statsmaker.js', 'roller.js', 'plothelpers.js', 'config.js', 'models.js', 'interface.js',
+];
 
-async function openPage({lambda = fakeLambda({}), hasPlotly = true, isNarrowScreen = false, storedMinimizedPanels} = {}) {
+async function openPage(
+    {lambda = fakeLambda({}), hasPlotly = true, isNarrowScreen = false, storedMinimizedPanels} = {},
+) {
     const dom = new JSDOM(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), {
         runScripts: 'outside-only',
         url: 'https://allthedice.test/',
@@ -135,7 +139,11 @@ function makeDieTable(sides, {offset = 0} = {}) {
         stddev: Number(Math.sqrt(variance).toFixed(3)),
         roller: {
             height: String(sides),
-            aliases: rolls.map(roll => ({primary: String(roll), alternate: String(roll), primaryHeight: String(sides)})),
+            aliases: rolls.map(roll => ({
+                primary: String(roll),
+                alternate: String(roll),
+                primaryHeight: String(sides),
+            })),
         },
     };
 }

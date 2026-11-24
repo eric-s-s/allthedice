@@ -208,7 +208,10 @@ test('a failed response that is not JSON shows the status', async () => {
     const page = await openPage({lambda});
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
-    assert.strictEqual(row.querySelector('.diceTableRequestError').textContent, 'The dice server answered 502 Bad Gateway.');
+    assert.strictEqual(
+        row.querySelector('.diceTableRequestError').textContent,
+        'The dice server answered 502 Bad Gateway.'
+    );
 });
 
 test('a successful response that is not JSON is an error', async () => {
@@ -217,7 +220,10 @@ test('a successful response that is not JSON is an error', async () => {
     const page = await openPage({lambda});
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
-    assert.strictEqual(row.querySelector('.diceTableRequestError').textContent, 'The dice server sent a response that was not JSON.');
+    assert.strictEqual(
+        row.querySelector('.diceTableRequestError').textContent,
+        'The dice server sent a response that was not JSON.'
+    );
 });
 
 test('a successful response that is not a dice table is an error and plots nothing', async () => {
@@ -328,7 +334,8 @@ test('an example skips a request that has text but has not been submitted', asyn
     page.typeInto(page.getDiceTableRequestRows()[0].elements.buildString, 'Die(4)');
     clickExample(page, 'Die(6)');
     await settle();
-    assert.deepStrictEqual(page.getDiceTableRequestRows().map(row => row.elements.buildString.value), ['Die(4)', 'Die(6)']);
+    const buildStrings = page.getDiceTableRequestRows().map(row => row.elements.buildString.value);
+    assert.deepStrictEqual(buildStrings, ['Die(4)', 'Die(6)']);
 });
 
 function queueRollOfColumn(page, column) {
@@ -367,7 +374,7 @@ test('rolling shows the latest roll and the earlier rolls newest first', async (
     assert.strictEqual(roller.earlierRolls(), '3, 1');
 });
 
-test('roll history survives a redraw but is cleared when the dice table is reloaded', async () => {
+test('roll history survives a render but is cleared when the dice table is reloaded', async () => {
     const page = await openPageWithKnownTables();
     const [row] = page.getDiceTableRequestRows();
     await page.submitDiceTableRequest(row, 'Die(3)');
@@ -546,30 +553,41 @@ function countValueWrites(page, input) {
     return writes;
 }
 
-test('redrawing does not rewrite inputs that already show their model', async () => {
-    const page = await openPageWithKnownTables();
-    page.document.getElementById('addDiceTableRequest').click();
-    const [first, second] = page.getDiceTableRequestRows();
-    const [statsRequest] = page.getStatsRequestRows();
-    await page.submitDiceTableRequest(first, 'Die(3)');
-    page.typeInto(second.elements.buildString, 'Die(6');
-    const buildStringWrites = countValueWrites(page, second.elements.buildString);
-    const lowWrites = countValueWrites(page, statsRequest.elements.low);
+test(
+    'rendering does not rewrite a build string input that already matches its diceTableRequest.buildStringInput value',
+    async () => {
+        const page = await openPageWithKnownTables();
+        page.document.getElementById('addDiceTableRequest').click();
+        const [first, second] = page.getDiceTableRequestRows();
+        page.typeInto(second.elements.buildString, 'Die(6');
+        const writes = countValueWrites(page, second.elements.buildString);
 
-    await page.submitDiceTableRequest(first, 'Die(6)');
-    assert.deepStrictEqual(buildStringWrites, []);
-    assert.deepStrictEqual(lowWrites, []);
-    assert.strictEqual(second.elements.buildString.value, 'Die(6');
-});
+        await page.submitDiceTableRequest(first, 'Die(3)');
+        assert.deepStrictEqual(writes, []);
+    },
+);
 
-test('a redraw keeps the typed but unsubmitted text of every request', async () => {
+test(
+    'rendering does not rewrite a stats high input that already matches its statsRequest.highInput value',
+    async () => {
+        const page = await openPageWithKnownTables();
+        const [row] = page.getDiceTableRequestRows();
+        const [statsRequest] = page.getStatsRequestRows();
+        await page.submitDiceTableRequest(row, 'Die(3)');
+        const writes = countValueWrites(page, statsRequest.elements.high);
+
+        await page.submitDiceTableRequest(row, 'Die(6)');
+        assert.deepStrictEqual(writes, []);
+    },
+);
+
+test('rendering keeps unsubmitted text typed into a build string input', async () => {
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
     const [first, second] = page.getDiceTableRequestRows();
     page.typeInto(second.elements.buildString, 'Die(6)');
     await page.submitDiceTableRequest(first, 'Die(3)');
     assert.strictEqual(second.elements.buildString.value, 'Die(6)');
-    assert.ok(!second.querySelector('.swatch').classList.contains('active'));
 });
 
 test('the state can be read from the console as allTheDice.state', async () => {

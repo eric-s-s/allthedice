@@ -221,7 +221,9 @@ function onPageLoad() {
 
     function render() {
         const loadedDiceTableRequests = state.diceTableRequests.filter(isLoadedDiceTableRequest);
-        const rollLimits = loadedDiceTableRequests.length === 0 ? null : getLowestAndHighestRolls(loadedDiceTableRequests);
+        const rollLimits = loadedDiceTableRequests.length === 0
+            ? null
+            : getLowestAndHighestRolls(loadedDiceTableRequests);
         if (rollLimits !== null) {
             fillBlankStatsInputs(rollLimits);
         }
@@ -483,7 +485,7 @@ async function fetchDiceTable(buildString) {
             body: JSON.stringify({buildString}),
         });
     } catch (error) {
-        throw new Error(`Could not reach the dice server at ${getLambdaEndpoint()}.`);
+        throw new Error(`Could not reach the dice server at ${getLambdaEndpoint()}.`, {cause: error});
     }
     const body = await parseJsonOrNull(response);
     if (!response.ok) {
@@ -508,7 +510,7 @@ async function fetchDiceTable(buildString) {
 async function parseJsonOrNull(response) {
     try {
         return await response.json();
-    } catch (notJson) {
+    } catch {
         return null;
     }
 }
@@ -602,7 +604,8 @@ function saveMinimizedPanels() {
     const minimized = [...document.querySelectorAll('.panel.minimized')].map(panel => panel.id);
     try {
         localStorage.setItem(minimizedPanelsStorageKey, JSON.stringify(minimized));
-    } catch (storageUnavailable) {
+    } catch {
+        // storage is unavailable (private window, blocked site data): the panels just aren't remembered
     }
 }
 
@@ -610,7 +613,7 @@ function loadMinimizedPanels() {
     try {
         const stored = JSON.parse(localStorage.getItem(minimizedPanelsStorageKey) ?? 'null');
         return Array.isArray(stored) ? stored : [];
-    } catch (error) {
+    } catch {
         return [];
     }
 }
