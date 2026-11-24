@@ -209,23 +209,18 @@
     </form>
 </template>
 
-<datalist id="rollBounds">
-    <option value="MIN"></option>
-    <option value="MAX"></option>
-</datalist>
-
 <template id="statsRequestTemplate">
     <form class="statsRequest">
         <span class="rollBound">From
             <button type="button" class="iconButton stepButton" name="lowDown" aria-label="Step From down">&minus;</button>
-            <input type="text" name="low" aria-label="From" list="rollBounds" required
+            <input type="text" name="low" aria-label="From" required
                    pattern="[Mm][Ii][Nn]|[Mm][Aa][Xx]|-?[0-9]+" title="MIN, MAX, or a whole number"
                    autocomplete="off" spellcheck="false">
             <button type="button" class="iconButton stepButton" name="lowUp" aria-label="Step From up">+</button>
         </span>
         <span class="rollBound">to
             <button type="button" class="iconButton stepButton" name="highDown" aria-label="Step to down">&minus;</button>
-            <input type="text" name="high" aria-label="to" list="rollBounds" required
+            <input type="text" name="high" aria-label="to" required
                    pattern="[Mm][Ii][Nn]|[Mm][Aa][Xx]|-?[0-9]+" title="MIN, MAX, or a whole number"
                    autocomplete="off" spellcheck="false">
             <button type="button" class="iconButton stepButton" name="highUp" aria-label="Step to up">+</button>
