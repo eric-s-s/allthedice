@@ -61,11 +61,11 @@ class StatsRequestView {
             onPressAndHold(button, () => actions.step(bound, delta));
         }
 
-        this.low.addEventListener('input', () => {
-            model.lowInput = this.low.value;
+        onRollBoundTyping(this.low, () => model.lowInput, text => {
+            model.lowInput = text;
         });
-        this.high.addEventListener('input', () => {
-            model.highInput = this.high.value;
+        onRollBoundTyping(this.high, () => model.highInput, text => {
+            model.highInput = text;
         });
         this.element.addEventListener('submit', event => {
             event.preventDefault();
@@ -79,6 +79,28 @@ class StatsRequestView {
         setInputValue(this.low, model.lowInput);
         setInputValue(this.high, model.highInput);
     }
+}
+
+/**
+ * Keeps typing that could still become MIN, MAX or a whole number, and undoes the rest, so the box never holds
+ * text like 5a or mx. An undone change puts the cursor back where it was.
+ * @param {HTMLInputElement} input
+ * @param {() => string} getAccepted the text the box held before the change
+ * @param {(text: string) => void} accept
+ */
+function onRollBoundTyping(input, getAccepted, accept) {
+    input.addEventListener('input', () => {
+        if (isPartialRollBound(input.value)) {
+            accept(input.value);
+            return;
+        }
+        const accepted = getAccepted();
+        const cursorAfterChange = input.selectionStart ?? input.value.length;
+        const cursor = cursorAfterChange - (input.value.length - accepted.length);
+        const clampedCursor = Math.min(Math.max(cursor, 0), accepted.length);
+        input.value = accepted;
+        input.setSelectionRange(clampedCursor, clampedCursor);
+    });
 }
 
 /** how long a step button is held before it starts repeating */

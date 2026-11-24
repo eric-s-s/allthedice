@@ -139,6 +139,14 @@ class StatsRequest {
 
 /**
  * @param {string} text
+ * @returns {boolean} true when more typing could still turn the text into MIN, MAX (in any case) or a whole number
+ */
+function isPartialRollBound(text) {
+    return /^(-?[0-9]*|m(in?|ax?)?)$/i.test(text);
+}
+
+/**
+ * @param {string} text
  * @returns {RollBound | null} null when the text is not MIN, MAX (in any case) or a whole number
  */
 function parseRollBound(text) {

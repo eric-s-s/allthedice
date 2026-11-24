@@ -495,6 +495,32 @@ test('a high typed above the highest roll snaps to MAX on submit', async () => {
     assert.strictEqual(getStatsRowLabel(page), '2 to 3');
 });
 
+test('typing that cannot become MIN, MAX or a whole number is undone', async () => {
+    const page = await openPageWithKnownTables();
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.low, '5');
+    page.typeInto(statsRequest.elements.low, '5a');
+    assert.strictEqual(statsRequest.elements.low.value, '5');
+});
+
+test('typing the start of MAX is kept', async () => {
+    const page = await openPageWithKnownTables();
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.high, 'ma');
+    assert.strictEqual(statsRequest.elements.high.value, 'ma');
+});
+
+test('undone typing puts the cursor back where it was', async () => {
+    const page = await openPageWithKnownTables();
+    const [statsRequest] = page.getStatsRequestRows();
+    const low = statsRequest.elements.low;
+    page.typeInto(low, '12');
+    low.value = '1x2';
+    low.setSelectionRange(2, 2);
+    low.dispatchEvent(new page.window.Event('input', {bubbles: true}));
+    assert.strictEqual(low.selectionStart, 1);
+});
+
 test('a typed min shows as MIN after submit', async () => {
     const page = await openPageWithKnownTables();
     await loadDiceTable(page, 'Die(3)');

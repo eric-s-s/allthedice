@@ -3,9 +3,9 @@ const assert = require('node:assert');
 const {loadScripts} = require('./load.js');
 const {makeDieTable} = require('./page.js');
 
-const {parseDiceTable, DiceTableRequest, StatsRequest, parseRollBound, stepRollBound} = loadScripts(
+const {parseDiceTable, DiceTableRequest, StatsRequest, isPartialRollBound, parseRollBound, stepRollBound} = loadScripts(
     ['roller.js', 'plothelpers.js', 'models.js', 'fetch-dice-tables.js'],
-    ['parseDiceTable', 'DiceTableRequest', 'StatsRequest', 'parseRollBound', 'stepRollBound'],
+    ['parseDiceTable', 'DiceTableRequest', 'StatsRequest', 'isPartialRollBound', 'parseRollBound', 'stepRollBound'],
 );
 
 function makeDiceTable(sides = 3) {
@@ -111,6 +111,18 @@ test('submit resets typed min and max to MIN and MAX', () => {
     request.submit(0);
     assert.strictEqual(request.lowInput, 'MIN');
     assert.strictEqual(request.highInput, 'MAX');
+});
+
+test('isPartialRollBound accepts the start of MIN, MAX or a whole number', () => {
+    for (const text of ['', '-', '-1', '12', 'm', 'Mi', 'MIN', 'ma', 'mAX']) {
+        assert.strictEqual(isPartialRollBound(text), true, text);
+    }
+});
+
+test('isPartialRollBound rejects text that cannot become MIN, MAX or a whole number', () => {
+    for (const text of ['5a', 'mx', '1.5', 'minn', ' 5', '--1', '1-']) {
+        assert.strictEqual(isPartialRollBound(text), false, text);
+    }
 });
 
 test('parseRollBound reads min in any case as MIN', () => {
