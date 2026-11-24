@@ -1,3 +1,4 @@
+/** @param {string} diceTableName */
 function getDiceList(diceTableName) {
     const prefix = '<DiceTable containing ';
     if (diceTableName.startsWith(prefix) && diceTableName.endsWith('>')) {
@@ -6,29 +7,11 @@ function getDiceList(diceTableName) {
     return diceTableName;
 }
 
-function getTraceColor(index) {
-    const plotlyDefaultColors = [
-        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-    ];
-    return plotlyDefaultColors[index % plotlyDefaultColors.length];
-}
-
-function getStatsFillColor(traceIndex, rangeIndex) {
-    const plotlyDefaultRgb = [
-        [31, 119, 180], [255, 127, 14], [44, 160, 44], [214, 39, 40], [148, 103, 189],
-        [140, 86, 75], [227, 119, 194], [127, 127, 127], [188, 189, 34], [23, 190, 207],
-    ];
-    const perRangeShifts = [
-        [0, -10, 10], [10, 10, 10], [-10, -10, -10], [-10, 10, -10], [10, -10, 10],
-        [-10, -10, 10], [10, -10, -10], [-10, 10, 10], [10, 10, -10], [10, 0, -10],
-    ];
-    const color = plotlyDefaultRgb[traceIndex % plotlyDefaultRgb.length];
-    const shift = perRangeShifts[rangeIndex % perRangeShifts.length];
-    const [r, g, b] = color.map((value, i) => Math.min(255, Math.max(0, value + shift[i])));
-    return `rgba(${r},${g},${b},0.5)`;
-}
-
+/**
+ * @param {number} low
+ * @param {number} high
+ * @param {{x: number[], y: number[]}} data
+ */
 function getStatsFillTrace(low, high, data) {
     const xs = data.x;
     const ys = data.y;
@@ -51,10 +34,20 @@ function getStatsFillTrace(low, high, data) {
     return {x, y};
 }
 
+/**
+ * @param {number} low
+ * @param {number} high
+ */
 function getRangeLabel(low, high) {
     return low === high ? String(low) : `${low} to ${high}`;
 }
 
+/**
+ * @param {string} diceList
+ * @param {number} low
+ * @param {number} high
+ * @param {string} pctChance
+ */
 function getStatsTraceName(diceList, low, high, pctChance) {
     return `${diceList} ${getRangeLabel(low, high)}: ${pctChance}%`;
 }

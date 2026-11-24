@@ -6,7 +6,10 @@ const {
     SciNum, getStats, createSciNumObj, getStatsFromSciNumObj, getSciNumValue, createStatsObj, getEveryRollFrom,
 } = loadScripts(
     ['scinum.js', 'statsmaker.js'],
-    ['SciNum', 'getStats', 'createSciNumObj', 'getStatsFromSciNumObj', 'getSciNumValue', 'createStatsObj', 'getEveryRollFrom'],
+    [
+        'SciNum', 'getStats', 'createSciNumObj', 'getStatsFromSciNumObj', 'getSciNumValue', 'createStatsObj',
+        'getEveryRollFrom',
+    ],
 );
 
 test("createStatsObj positive poswers commaed", () => {

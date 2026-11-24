@@ -2,11 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {loadScripts} = require('./load.js');
 
-const {
-    getDiceList, getTraceColor, getStatsFillColor, getStatsFillTrace, getRangeLabel, getStatsTraceName,
-} = loadScripts(
+const {getDiceList, getStatsFillTrace, getRangeLabel, getStatsTraceName} = loadScripts(
     ['plothelpers.js'],
-    ['getDiceList', 'getTraceColor', 'getStatsFillColor', 'getStatsFillTrace', 'getRangeLabel', 'getStatsTraceName'],
+    ['getDiceList', 'getStatsFillTrace', 'getRangeLabel', 'getStatsTraceName'],
 );
 
 test('getDiceList strips the DiceTable wrapper from the lambda name', () => {
@@ -17,23 +15,6 @@ test('getDiceList strips the DiceTable wrapper from the lambda name', () => {
 
 test('getDiceList leaves anything else alone', () => {
     assert.strictEqual(getDiceList('[1D6]'), '[1D6]');
-});
-
-test('getTraceColor cycles through ten colors', () => {
-    assert.strictEqual(getTraceColor(0), '#1f77b4');
-    assert.strictEqual(getTraceColor(1), '#ff7f0e');
-    assert.strictEqual(getTraceColor(10), getTraceColor(0));
-});
-
-test('getStatsFillColor shifts the trace color per range and stays half transparent', () => {
-    assert.strictEqual(getStatsFillColor(0, 0), 'rgba(31,109,190,0.5)');
-    assert.strictEqual(getStatsFillColor(0, 1), 'rgba(41,129,190,0.5)');
-    assert.strictEqual(getStatsFillColor(10, 10), getStatsFillColor(0, 0));
-});
-
-test('getStatsFillColor keeps channels within 0 to 255', () => {
-    const orangeShiftedPastMaxRed = getStatsFillColor(1, 1);
-    assert.strictEqual(orangeShiftedPastMaxRed, 'rgba(255,137,24,0.5)');
 });
 
 const die = {x: [1, 2, 3, 4], y: [10, 20, 30, 40]};

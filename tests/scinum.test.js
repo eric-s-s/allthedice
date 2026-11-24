@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {loadScripts} = require('./load.js');
 
-const {SciNum, sumSciNum, maxPower, toSignedStr} = loadScripts(
-    ['scinum.js'], ['SciNum', 'sumSciNum', 'maxPower', 'toSignedStr']
+const {SciNum, sumSciNum, maxPower} = loadScripts(
+    ['scinum.js'], ['SciNum', 'sumSciNum', 'maxPower']
 );
 
 test("new scinum positive", () => {
@@ -150,7 +150,9 @@ test("toFancyStr lt zero rounding", () => {
     assert.deepStrictEqual(new SciNum(9.99999, -1).toFancyStr(), "1.000");
     assert.deepStrictEqual(new SciNum(9.99999, -2).toFancyStr(), "0.1000");
     assert.deepStrictEqual(new SciNum(9.99999, -3).toFancyStr(), "0.01000");
-    assert.deepStrictEqual(new SciNum(9.99999, -4).toFancyStr(), "1.000e-3", " i'm a lazy bum and i won't fix this now.");
+    assert.deepStrictEqual(
+        new SciNum(9.99999, -4).toFancyStr(), "1.000e-3", " i'm a lazy bum and i won't fix this now."
+    );
 });
 
 test("toFancyStr large and small", () => {

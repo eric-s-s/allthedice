@@ -104,21 +104,60 @@ test('a dice table with more than 100 rolls is plotted as lines without markers'
     assert.strictEqual(getLastTraces(page)[0].mode, 'lines');
 });
 
-test('trace colors follow the loaded dice tables, skipping requests that have not loaded', async () => {
+function getSwatchColor(row) {
+    return row.querySelector('.swatch').style.background;
+}
+
+test('a dice table gets its color when it first loads, and requests that have not loaded get none', async () => {
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
     page.document.getElementById('addDiceTableRequest').click();
     const [first, unloaded, third] = page.getDiceTableRequestRows();
-    await page.submitDiceTableRequest(first, 'Die(3)');
     await page.submitDiceTableRequest(third, 'Die(6)');
+    await page.submitDiceTableRequest(first, 'Die(3)');
     const traces = getLastTraces(page);
     assert.deepStrictEqual(traces.map(trace => trace.name), ['[1D3]', '[1D6]']);
-    assert.strictEqual(traces[1].line.color, page.window.getTraceColor(1));
-    assert.strictEqual(
-        third.querySelector('.swatch').style.background,
-        asCssColor(page, page.window.getTraceColor(1))
-    );
+    assert.strictEqual(traces[0].line.color, page.window.getTraceColor(1));
+    assert.strictEqual(traces[1].line.color, page.window.getTraceColor(0));
+    assert.strictEqual(getSwatchColor(first), asCssColor(page, page.window.getTraceColor(1)));
+    assert.strictEqual(getSwatchColor(third), asCssColor(page, page.window.getTraceColor(0)));
     assert.ok(!unloaded.querySelector('.swatch').classList.contains('active'));
+});
+
+test('a failed first load does not take a color', async () => {
+    const page = await openPageWithKnownTables();
+    page.document.getElementById('addDiceTableRequest').click();
+    const [first, second] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(');
+    await page.submitDiceTableRequest(second, 'Die(3)');
+    assert.strictEqual(getSwatchColor(second), asCssColor(page, page.window.getTraceColor(0)));
+    assert.ok(!first.querySelector('.swatch').classList.contains('active'));
+});
+
+test('a reload keeps the dice table\'s color', async () => {
+    const page = await openPageWithKnownTables();
+    page.document.getElementById('addDiceTableRequest').click();
+    const [first, second] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    await page.submitDiceTableRequest(second, 'Die(6)');
+    await page.submitDiceTableRequest(second, 'Die(3)+10');
+    assert.strictEqual(getLastTraces(page)[1].line.color, page.window.getTraceColor(1));
+    assert.strictEqual(getSwatchColor(second), asCssColor(page, page.window.getTraceColor(1)));
+});
+
+test('a removed dice table\'s color goes to the next dice table that loads', async () => {
+    const page = await openPageWithKnownTables();
+    page.document.getElementById('addDiceTableRequest').click();
+    page.document.getElementById('addDiceTableRequest').click();
+    const [first, second, third] = page.getDiceTableRequestRows();
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    await page.submitDiceTableRequest(second, 'Die(6)');
+    first.querySelector('.remove').click();
+    await page.submitDiceTableRequest(third, 'Die(101)');
+    assert.deepStrictEqual(getLastTraces(page).map(trace => trace.line.color), [
+        page.window.getTraceColor(1),
+        page.window.getTraceColor(0),
+    ]);
 });
 
 test('a pending request disables its submit button and ignores another submit', async () => {
@@ -169,7 +208,10 @@ test('a failed response that is not JSON shows the status', async () => {
     const page = await openPage({lambda});
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
-    assert.strictEqual(row.querySelector('.diceTableRequestError').textContent, 'The dice server answered 502 Bad Gateway.');
+    assert.strictEqual(
+        row.querySelector('.diceTableRequestError').textContent,
+        'The dice server answered 502 Bad Gateway.'
+    );
 });
 
 test('a successful response that is not JSON is an error', async () => {
@@ -178,7 +220,25 @@ test('a successful response that is not JSON is an error', async () => {
     const page = await openPage({lambda});
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
-    assert.strictEqual(row.querySelector('.diceTableRequestError').textContent, 'The dice server sent a response that was not JSON.');
+    assert.strictEqual(
+        row.querySelector('.diceTableRequestError').textContent,
+        'The dice server sent a response that was not JSON.'
+    );
+});
+
+test('a successful response that is not a dice table is an error and plots nothing', async () => {
+    const lambda = fakeLambda({});
+    const {range, ...malformedResponseMissingRange} = die3;
+    lambda.respond = () => jsonResponse(200, malformedResponseMissingRange);
+    const page = await openPage({lambda});
+    const row = page.getDiceTableRequestRows()[0];
+    await page.submitDiceTableRequest(row, 'Die(3)');
+    assert.strictEqual(
+        row.querySelector('.diceTableRequestError').textContent,
+        'The dice server sent a bad dice table: "range" must be an array.'
+    );
+    assert.deepStrictEqual(getLastTraces(page), []);
+    assert.ok(!row.querySelector('.swatch').classList.contains('active'));
 });
 
 test('an unreachable lambda names the endpoint', async () => {
@@ -211,7 +271,7 @@ test('a failed resubmit keeps the dice table that was already loaded', async () 
     assert.ok(!row.querySelector('.diceTableRequestError').hidden);
 });
 
-test('removing a dice table request removes its trace', async () => {
+test('removing a dice table request removes its trace and leaves the other colors alone', async () => {
     const page = await openPageWithKnownTables();
     page.document.getElementById('addDiceTableRequest').click();
     const [first, second] = page.getDiceTableRequestRows();
@@ -220,10 +280,10 @@ test('removing a dice table request removes its trace', async () => {
     first.querySelector('.remove').click();
     assert.deepStrictEqual(page.getDiceTableRequestRows(), [second]);
     assert.deepStrictEqual(getTraceNames(page), ['[1D6]']);
-    assert.strictEqual(
-        second.querySelector('.swatch').style.background,
-        asCssColor(page, page.window.getTraceColor(0))
-    );
+    assert.strictEqual(getLastTraces(page)[0].line.color, page.window.getTraceColor(1));
+    assert.strictEqual(getSwatchColor(second), asCssColor(page, page.window.getTraceColor(1)));
+    const headers = page.document.querySelectorAll('#statsTable thead th');
+    assert.strictEqual(headers[1].style.color, asCssColor(page, page.window.getTraceColor(1)));
 });
 
 test('removing the last dice table request leaves a blank one', async () => {
@@ -271,10 +331,11 @@ test('an example adds a dice table request when none is blank', async () => {
 
 test('an example skips a request that has text but has not been submitted', async () => {
     const page = await openPage({lambda: fakeLambda({'Die(6)': die6})});
-    page.getDiceTableRequestRows()[0].elements.buildString.value = 'Die(4)';
+    page.typeInto(page.getDiceTableRequestRows()[0].elements.buildString, 'Die(4)');
     clickExample(page, 'Die(6)');
     await settle();
-    assert.deepStrictEqual(page.getDiceTableRequestRows().map(row => row.elements.buildString.value), ['Die(4)', 'Die(6)']);
+    const buildStrings = page.getDiceTableRequestRows().map(row => row.elements.buildString.value);
+    assert.deepStrictEqual(buildStrings, ['Die(4)', 'Die(6)']);
 });
 
 function queueRollOfColumn(page, column) {
@@ -313,7 +374,7 @@ test('rolling shows the latest roll and the earlier rolls newest first', async (
     assert.strictEqual(roller.earlierRolls(), '3, 1');
 });
 
-test('roll history survives a redraw but is cleared when the dice table is reloaded', async () => {
+test('roll history survives a render but is cleared when the dice table is reloaded', async () => {
     const page = await openPageWithKnownTables();
     const [row] = page.getDiceTableRequestRows();
     await page.submitDiceTableRequest(row, 'Die(3)');
@@ -421,7 +482,7 @@ test('a single-roll stats request is labeled with just that roll', async () => {
     assert.strictEqual(getStatsTableRows(page)[4][0], '2');
 });
 
-test('removing a stats request removes its stats row and shaded traces', async () => {
+test('removing a stats request removes its stats row and shaded traces and leaves the other shades alone', async () => {
     const page = await openPageWithKnownTables();
     await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
     page.document.getElementById('addStatsRequest').click();
@@ -433,21 +494,36 @@ test('removing a stats request removes its stats row and shaded traces', async (
     assert.strictEqual(getLastTraces(page).length, 2);
     assert.strictEqual(
         getLastTraces(page)[1].fillcolor,
-        page.window.getStatsFillColor(0, 0)
+        page.window.getStatsFillColor(0, 1)
     );
 });
 
-test('a stats request is shaded by its position among all stats requests, submitted or not', async () => {
+test('a stats request gets its shade when first submitted, and keeps it', async () => {
     const page = await openPageWithKnownTables();
     await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
     page.document.getElementById('addStatsRequest').click();
     const [unsubmitted, submitted] = page.getStatsRequestRows();
     await page.submitStatsRequest(submitted, 1, 2);
-    assert.strictEqual(getLastTraces(page)[1].fillcolor, page.window.getStatsFillColor(0, 1));
+    assert.strictEqual(getLastTraces(page)[1].fillcolor, page.window.getStatsFillColor(0, 0));
 
     await page.submitStatsRequest(unsubmitted, 3, 3);
+    await page.submitStatsRequest(submitted, 2, 2);
     const fillColors = getLastTraces(page).slice(1).map(trace => trace.fillcolor);
-    assert.deepStrictEqual(fillColors, [page.window.getStatsFillColor(0, 0), page.window.getStatsFillColor(0, 1)]);
+    assert.deepStrictEqual(fillColors, [page.window.getStatsFillColor(0, 1), page.window.getStatsFillColor(0, 0)]);
+});
+
+test('a removed stats request\'s shade goes to the next stats request that is submitted', async () => {
+    const page = await openPageWithKnownTables();
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
+    page.document.getElementById('addStatsRequest').click();
+    page.document.getElementById('addStatsRequest').click();
+    const [first, second, third] = page.getStatsRequestRows();
+    await page.submitStatsRequest(first, 1, 1);
+    await page.submitStatsRequest(second, 2, 2);
+    first.querySelector('.remove').click();
+    await page.submitStatsRequest(third, 3, 3);
+    const fillColors = getLastTraces(page).slice(1).map(trace => trace.fillcolor);
+    assert.deepStrictEqual(fillColors, [page.window.getStatsFillColor(0, 1), page.window.getStatsFillColor(0, 0)]);
 });
 
 test('removing the last stats request leaves a blank one', async () => {
@@ -460,6 +536,68 @@ test('removing the last stats request leaves a blank one', async () => {
     assert.strictEqual(statsRequestRows.length, 1);
     assert.notStrictEqual(statsRequestRows[0], statsRequest);
     assert.strictEqual(getStatsTableRows(page).length, 4);
+});
+
+function countValueWrites(page, input) {
+    const valueProperty = Object.getOwnPropertyDescriptor(page.window.HTMLInputElement.prototype, 'value');
+    const writes = [];
+    Object.defineProperty(input, 'value', {
+        get() {
+            return valueProperty.get.call(this);
+        },
+        set(value) {
+            writes.push(value);
+            valueProperty.set.call(this, value);
+        },
+    });
+    return writes;
+}
+
+test(
+    'rendering does not rewrite a build string input that already matches its diceTableRequest.buildStringInput value',
+    async () => {
+        const page = await openPageWithKnownTables();
+        page.document.getElementById('addDiceTableRequest').click();
+        const [first, second] = page.getDiceTableRequestRows();
+        page.typeInto(second.elements.buildString, 'Die(6');
+        const writes = countValueWrites(page, second.elements.buildString);
+
+        await page.submitDiceTableRequest(first, 'Die(3)');
+        assert.deepStrictEqual(writes, []);
+    },
+);
+
+test(
+    'rendering does not rewrite a stats high input that already matches its statsRequest.highInput value',
+    async () => {
+        const page = await openPageWithKnownTables();
+        const [row] = page.getDiceTableRequestRows();
+        const [statsRequest] = page.getStatsRequestRows();
+        await page.submitDiceTableRequest(row, 'Die(3)');
+        const writes = countValueWrites(page, statsRequest.elements.high);
+
+        await page.submitDiceTableRequest(row, 'Die(6)');
+        assert.deepStrictEqual(writes, []);
+    },
+);
+
+test('rendering keeps unsubmitted text typed into a build string input', async () => {
+    const page = await openPageWithKnownTables();
+    page.document.getElementById('addDiceTableRequest').click();
+    const [first, second] = page.getDiceTableRequestRows();
+    page.typeInto(second.elements.buildString, 'Die(6)');
+    await page.submitDiceTableRequest(first, 'Die(3)');
+    assert.strictEqual(second.elements.buildString.value, 'Die(6)');
+});
+
+test('the state can be read from the console as allTheDice.state', async () => {
+    const page = await openPageWithKnownTables();
+    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
+    const {state} = page.window.allTheDice;
+    assert.strictEqual(state.diceTableRequests.length, 1);
+    assert.strictEqual(state.diceTableRequests[0].buildStringInput, 'Die(3)');
+    assert.strictEqual(state.diceTableRequests[0].colorIndex, 0);
+    assert.strictEqual(state.statsRequests.length, 1);
 });
 
 test('the plot says it is unavailable when plotly did not load', async () => {

@@ -120,7 +120,8 @@ test('AliasTableRoller.roll asks for a column in [0, columns - 1] and a height i
 });
 
 test('AliasTableRoller rolls a fair die evenly', () => {
-    const die6AliasTable = ['6', '5', '4', '3', '2', '1'].map(roll => ({primary: roll, alternate: roll, primaryHeight: '6'}));
+    const die6AliasTable = ['6', '5', '4', '3', '2', '1']
+        .map(roll => ({primary: roll, alternate: roll, primaryHeight: '6'}));
     const roller = new AliasTableRoller('6', die6AliasTable);
     const counts = {};
     const draws = 60000;

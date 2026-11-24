@@ -1,4 +1,9 @@
 class AliasTableRoller {
+    /**
+     * @param {string} height
+     * @param {{primary: string, alternate: string, primaryHeight: string}[]} aliases
+     * @param {(low: bigint, high: bigint) => bigint} randBetween
+     */
     constructor(height, aliases, randBetween = randomBigIntBetween) {
         this.height = BigInt(height);
         this.aliases = aliases.map(alias => ({
@@ -17,6 +22,10 @@ class AliasTableRoller {
     }
 }
 
+/**
+ * @param {bigint | number} low
+ * @param {bigint | number} high
+ */
 function randomBigIntBetween(low, high) {
     let start = BigInt(low);
     let stop = BigInt(high);
@@ -26,6 +35,7 @@ function randomBigIntBetween(low, high) {
     return start + randomBigIntBelow(stop - start + 1n);
 }
 
+/** @param {bigint} limit */
 function randomBigIntBelow(limit) {
     if (limit <= 0n) {
         throw new RangeError('limit must be positive, got ' + limit);

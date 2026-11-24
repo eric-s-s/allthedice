@@ -1,0 +1,3 @@
+# GitHub Pages builds this site with Jekyll. Folders listed here stay in the repo but are not published.
+exclude:
+  - specs/
