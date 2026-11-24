@@ -134,7 +134,7 @@ weights    := '{' face ': ' weight (', ' face ': ' weight)* '}'</code></pre>
 <p>The builder checks these limits only. Anything else the server rejects (a pool too big to calculate, for example)
 shows up as the row's error after Done.</p>
 
-<h2 id="models">3. Data models (new <code>js/dice-builder.js</code>)</h2>
+<h2 id="models">3. Data models (new <code>js/dice-builder.js</code> and <code>js/build-string-parser.js</code>)</h2>
 <p>Every box keeps its raw text, the same way <code>StatsRequest.lowInput</code> does, so half-typed text like
 <code>-</code> survives a render. Text is turned into numbers only when the build string is made.</p>
 
@@ -218,6 +218,13 @@ keep values.</p>
         Also used as the die's label in the part row</td></tr>
     <tr><td><code>partToBuildString(part)</code></td><td><code>string | null</code></td>
         <td><code>null</code> when the count or a box the wrapper uses breaks a limit</td></tr>
+</table></div>
+
+<h3>Parser (new <code>js/build-string-parser.js</code>)</h3>
+<p>Reads build strings back into a <code>DiceBuilder</code>. It depends on the model, and the model doesn't depend on
+it: <code>toBuildString</code> and the <code>…ToBuildString</code> functions stay with the model.</p>
+<div class="tableWrap"><table>
+    <tr><th>function</th><th>returns</th><th>notes</th></tr>
     <tr><td><code>parseBuildString(text)</code></td><td><code>DiceBuilder | null</code></td>
         <td>A hand-written tokenizer and recursive-descent parser for the grammar in section 2. Blank text gives an
             empty builder. Text outside the grammar (stacked wrappers, two <code>Modifier</code>s, a count on
@@ -367,8 +374,8 @@ keep values.</p>
 </ul>
 
 <h3>Script order</h3>
-<p><code>js/dice-builder.js</code> loads after <code>models.js</code>, and <code>js/dice-builder-view.js</code> loads
-after <code>request-views.js</code>. Both go in <code>index.html</code> (with <code>?v=</code>) and in
+<p><code>js/dice-builder.js</code> loads after <code>models.js</code>, <code>js/build-string-parser.js</code> right
+after it, and <code>js/dice-builder-view.js</code> after <code>request-views.js</code>. All three go in <code>index.html</code> (with <code>?v=</code>) and in
 <code>pageScripts</code> in <code>tests/page.js</code>. <code>jsconfig.json</code> already includes
 <code>js/*.js</code>, so typecheck picks them up.</p>
 
@@ -391,7 +398,8 @@ after <code>request-views.js</code>. Both go in <code>index.html</code> (with <c
         jsdom 26.1.0). <code>openPage</code> stubs both on <code>window.HTMLDialogElement.prototype</code>:
         <code>showModal</code> sets <code>open</code>, and <code>close</code> clears it and dispatches
         <code>close</code>.</li>
-    <li>Add <code>js/dice-builder.js</code> and <code>js/dice-builder-view.js</code> to <code>pageScripts</code>.</li>
+    <li>Add <code>js/dice-builder.js</code>, <code>js/build-string-parser.js</code> and
+        <code>js/dice-builder-view.js</code> to <code>pageScripts</code>.</li>
     <li>Add helpers <code>openBuilder(row)</code> and <code>getBuilder()</code>, which returns the dialog.</li>
 </ul>
 
@@ -447,6 +455,11 @@ after <code>request-views.js</code>. Both go in <code>index.html</code> (with <c
             <li><code>toDie</code> ignores the weights for a <code>Die</code>.</li>
         </ul>
     </li>
+</ul>
+
+<h3>New <code>tests/build-string-parser.test.js</code></h3>
+<p>Loads <code>dice-builder.js</code> and <code>build-string-parser.js</code> with <code>loadScripts</code>.</p>
+<ul>
     <li><code>parseBuildString</code>:
         <ul>
             <li>gives an empty builder for blank text.</li>
