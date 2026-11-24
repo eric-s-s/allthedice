@@ -6,7 +6,7 @@ const {JSDOM} = require('jsdom');
 const repoRoot = path.join(__dirname, '..');
 const pageScripts = [
     'scinum.js', 'statsmaker.js', 'roller.js', 'plothelpers.js', 'colors.js', 'config.js', 'models.js',
-    'fetch-dice-tables.js', 'request-views.js', 'interface.js',
+    'dice-builder.js', 'fetch-dice-tables.js', 'request-views.js', 'dice-builder-view.js', 'interface.js',
 ];
 
 async function openPage(
@@ -25,6 +25,7 @@ async function openPage(
         addEventListener() {},
     });
     window.fetch = lambda.fetch;
+    stubDialogs(window);
     const plotly = fakePlotly();
     if (hasPlotly) {
         window.Plotly = plotly;
@@ -80,7 +81,32 @@ function pageActions(window) {
         await settle();
     }
 
-    return {getDiceTableRequestRows, getStatsRequestRows, typeInto, submitDiceTableRequest, submitStatsRequest};
+    function getBuilder() {
+        return document.getElementById('diceBuilder');
+    }
+
+    function openBuilder(row) {
+        row.querySelector('.build').click();
+        return getBuilder();
+    }
+
+    return {
+        getDiceTableRequestRows, getStatsRequestRows, typeInto, submitDiceTableRequest, submitStatsRequest, getBuilder,
+        openBuilder,
+    };
+}
+
+/** jsdom has HTMLDialogElement but not showModal or close */
+function stubDialogs(window) {
+    window.HTMLDialogElement.prototype.showModal = function () {
+        this.open = true;
+    };
+    window.HTMLDialogElement.prototype.close = function () {
+        if (this.open) {
+            this.open = false;
+            this.dispatchEvent(new window.Event('close'));
+        }
+    };
 }
 
 async function settle() {

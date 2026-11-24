@@ -221,9 +221,9 @@ keep values.</p>
     <tr><td><code>parseBuildString(text)</code></td><td><code>DiceBuilder | null</code></td>
         <td>A hand-written tokenizer and recursive-descent parser for the grammar in section 2. Blank text gives an
             empty builder. Text outside the grammar (stacked wrappers, two <code>Modifier</code>s, a count on
-            <code>Modifier</code>, a face below 1, or anything unknown) gives <code>null</code>. Weights become
-            <code>weightInputs</code> from face 1 to the highest face, and missing faces become <code>'0'</code>.
-            The draft starts fresh.</td></tr>
+            <code>Modifier</code>, a face below 1, or anything unknown) gives <code>null</code>, and so does a value
+            outside the limits. Weights become the die's <code>weights</code> from face 1 to the highest face, and
+            missing faces become 0. The draft starts fresh.</td></tr>
 </table></div>
 
 <h3><code>AppState</code> (<code>models.js</code>)</h3>
@@ -253,7 +253,8 @@ keep values.</p>
             <li><b>Add a die:</b> the seven preset buttons, each with <code>data-sides</code>.</li>
             <li><b>Custom die:</b> a kind <code>&lt;select&gt;</code>, a Sides box, a Modifier box (shown for
                 <code>ModDie</code> and <code>ModWeightedDie</code>), a weights area (shown for the weighted kinds) with
-                one box per side labelled by its face, and an <b>Add</b> button.</li>
+                one box per side labelled by its face, and then an <b>Add custom die</b> button. The button is disabled
+                while <code>draft.toDie()</code> is <code>null</code>.</li>
             <li><b>Your dice:</b> <code>&lt;div class="builderParts"&gt;</code>, plus an empty note when there are no
                 parts.</li>
             <li><b>Modifier:</b> − / box / + for the collection modifier.</li>
@@ -263,14 +264,16 @@ keep values.</p>
         </ol>
     </li>
     <li><code>&lt;template id="builderPartTemplate"&gt;</code> holds one part row: − / count box / +, "×", the die
-        label in <code>&lt;code&gt;</code>, a wrapper <code>&lt;select&gt;</code> (None, Best of pool, Worst of pool,
-        Exploding, Strong), Pool and Keep boxes (shown for the pools), a Multiplier box (shown for Strong), and a remove
-        × button.</li>
+        label in <code>&lt;code&gt;</code>, a <code>.builderWrapperControls</code> group, and a remove × button. The
+        group holds a wrapper <code>&lt;select&gt;</code> (No wrapper, Best of pool, Worst of pool, Exploding,
+        Strong), Pool and Keep boxes (shown for the pools), and a Multiplier box (shown for Strong).</li>
     <li>Every number box is <code>type="text"</code>, for the same reason as the stats boxes: a number box reports
         <code>''</code> for half-typed text like <code>-</code>, so the model couldn't keep the raw text. Boxes that
         can't be negative get <code>inputmode="numeric"</code>, which gives phones the number pad. The die modifier box
         doesn't, because the number pad has no minus sign. The collection modifier has − / + buttons instead.</li>
-    <li>Each box and select has an <code>aria-label</code> (for example "Count of Die(6)", "Weight of face 3").</li>
+    <li>Every box and select is labelled. The fixed ones in the dialog use a wrapping <code>&lt;label&gt;</code> or
+        <code>aria-labelledby</code>. The ones made per part or per face get an <code>aria-label</code> naming the
+        die or face (for example "Count of Die(6)", "Weight of face 3").</li>
 </ul>
 
 <h3>Styles (<code>styles.css</code>)</h3>
@@ -280,8 +283,9 @@ keep values.</p>
     <li><code>#diceBuilder</code> uses <code>--surface</code>, <code>--radius</code> and <code>--menu-shadow</code>.
         Its width is <code>min(40rem, 100vw - 32px)</code>, its height is at most <code>100dvh - 32px</code>, and its
         body scrolls. <code>::backdrop</code> dims the page.</li>
-    <li>Presets wrap as a row of <code>.secondary</code> buttons. Part rows wrap, so the wrapper boxes drop to a second
-        line on phones.</li>
+    <li>Presets wrap as a row of <code>.secondary</code> buttons. Each part row is a grid: count, die and remove
+        on the first line, and the wrapper group on the second, where it wraps on phones. A long die label wraps
+        inside its own column.</li>
     <li><code>[aria-invalid="true"]</code> boxes get a <code>--danger</code> outline.</li>
     <li>Step buttons reuse <code>.iconButton.stepButton</code>, which is already 44px on phones.</li>
 </ul>
@@ -314,7 +318,9 @@ keep values.</p>
         <code>weightInputs.length</code>, so a focused box keeps its focus.</li>
     <li>The dialog's <code>cancel</code> event (Escape) calls <code>preventDefault()</code> and then
         <code>actions.cancel()</code>. The close button and Cancel call <code>actions.cancel()</code>, and Done calls
-        <code>actions.done()</code>. The dialog is only ever closed by <code>update</code>.</li>
+        <code>actions.done()</code>. The dialog is only ever closed by <code>update</code>. Some browsers ignore
+        <code>preventDefault()</code> on a repeated Escape and close the dialog anyway, so a <code>close</code> event
+        while a session is still open also calls <code>actions.cancel()</code>.</li>
     <li><code>update(session)</code>:
         <ul>
             <li>With <code>null</code>: if the dialog is open, it calls <code>close()</code>.</li>
@@ -338,9 +344,10 @@ keep values.</p>
         <code>render()</code>. Typing in the builder doesn't touch the plot, stats or roller, and Plotly doesn't
         re-plot on every keystroke.</li>
     <li><strong>Done:</strong> sets <code>request.buildStringInput</code> to <code>toBuildString()</code>, sets
-        <code>state.diceBuilder</code> to <code>null</code>, and calls <code>getDiceTable(request)</code>, which renders.
-        It does nothing when the build string is <code>null</code> or <code>''</code> (the button is disabled
-        anyway).</li>
+        <code>state.diceBuilder</code> to <code>null</code>, calls <code>render()</code> to close the dialog, and then
+        calls <code>getDiceTable(request)</code>. Rendering first matters because <code>getDiceTable</code> returns
+        without rendering when the request is already pending. Done does nothing when the build string is
+        <code>null</code> or <code>''</code> (the button is disabled anyway).</li>
     <li><strong>Cancel:</strong> sets <code>state.diceBuilder</code> to <code>null</code> and calls
         <code>render()</code>.</li>
     <li><code>render()</code> calls <code>diceBuilderView.update(state.diceBuilder)</code> after the request
@@ -417,6 +424,7 @@ after <code>request-views.js</code>. Both go in <code>index.html</code> (with <c
             <li><code>addCustomDie</code> does nothing for an invalid draft.</li>
             <li><code>stepCount</code> keeps a count of 1 at 1.</li>
             <li><code>stepModifier</code> steps below 0.</li>
+            <li><code>removePart</code> removes only that part.</li>
         </ul>
     </li>
     <li><code>CustomDieDraft</code>:
@@ -442,6 +450,7 @@ after <code>request-views.js</code>. Both go in <code>index.html</code> (with <c
             <li>gives <code>null</code> for stacked wrappers.</li>
             <li>gives <code>null</code> for two <code>Modifier</code>s.</li>
             <li>gives <code>null</code> for an unknown die.</li>
+            <li>gives <code>null</code> for a keep larger than the pool.</li>
             <li>reads back what <code>toBuildString</code> writes for the example in section 2.</li>
         </ul>
     </li>
@@ -465,7 +474,7 @@ file is already long.</p>
     <li>Done writes the build string into the row.</li>
     <li>Done calculates the row (the lambda gets the build string).</li>
     <li>Done closes the builder.</li>
-    <li>Cancel leaves the row's text unchanged.</li>
+    <li>Cancel closes the builder and leaves the row's text unchanged.</li>
     <li>Escape (a <code>cancel</code> event) closes the builder and leaves the row unchanged.</li>
     <li>Changing the builder doesn't re-plot (<code>plotly.reactCalls</code> stays the same length).</li>
     <li>Build is disabled while the row is calculating.</li>
