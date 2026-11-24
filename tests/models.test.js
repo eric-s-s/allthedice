@@ -4,7 +4,7 @@ const {loadScripts} = require('./load.js');
 const {makeDieTable} = require('./page.js');
 
 const {parseDiceTable, DiceTableRequest, StatsRequest} = loadScripts(
-    ['roller.js', 'plothelpers.js', 'models.js', 'server.js'],
+    ['roller.js', 'plothelpers.js', 'models.js', 'fetch-dice-tables.js'],
     ['parseDiceTable', 'DiceTableRequest', 'StatsRequest'],
 );
 

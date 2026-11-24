@@ -7,7 +7,7 @@ const {
     getTraceColor, getStatsFillColor, lowestUnusedIndex, getUnusedColorIndex, getUnusedShiftIndex,
     parseDiceTable, DiceTableRequest, StatsRequest,
 } = loadScripts(
-    ['roller.js', 'plothelpers.js', 'colors.js', 'models.js', 'server.js'],
+    ['roller.js', 'plothelpers.js', 'colors.js', 'models.js', 'fetch-dice-tables.js'],
     [
         'getTraceColor', 'getStatsFillColor', 'lowestUnusedIndex', 'getUnusedColorIndex', 'getUnusedShiftIndex',
         'parseDiceTable', 'DiceTableRequest', 'StatsRequest',

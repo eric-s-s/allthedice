@@ -15,7 +15,7 @@
     "colors.js",
     "config.js",
     "models.js",
-    "server.js",
+    "fetch-dice-tables.js",
     "interface.js",
     "globals.d.ts"
   ]

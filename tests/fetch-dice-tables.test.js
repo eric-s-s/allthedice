@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const {loadScripts} = require('./load.js');
 const {makeDieTable} = require('./page.js');
 
-const {parseDiceTable} = loadScripts(['plothelpers.js', 'server.js'], ['parseDiceTable']);
+const {parseDiceTable} = loadScripts(['plothelpers.js', 'fetch-dice-tables.js'], ['parseDiceTable']);
 
 test('parseDiceTable keeps the server fields, converts range and computes the dice list', () => {
     const json = makeDieTable(3);
