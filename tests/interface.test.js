@@ -495,6 +495,14 @@ test('a high typed above the highest roll snaps to MAX on submit', async () => {
     assert.strictEqual(getStatsRowLabel(page), '2 to 3');
 });
 
+test('a typed min shows as MIN after submit', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(3)');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(statsRequest, 'min', 'MAX');
+    assert.strictEqual(statsRequest.elements.low.value, 'MIN');
+});
+
 test('the + button raises its box by 1', async () => {
     const page = await openPageWithKnownTables();
     await loadDiceTable(page, 'Die(6)');

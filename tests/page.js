@@ -6,7 +6,7 @@ const {JSDOM} = require('jsdom');
 const repoRoot = path.join(__dirname, '..');
 const pageScripts = [
     'scinum.js', 'statsmaker.js', 'roller.js', 'plothelpers.js', 'colors.js', 'config.js', 'models.js',
-    'fetch-dice-tables.js', 'interface.js',
+    'fetch-dice-tables.js', 'request-views.js', 'interface.js',
 ];
 
 async function openPage(

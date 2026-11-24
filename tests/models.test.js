@@ -104,6 +104,15 @@ test('submit stores the bounds as typed and unsorted, and assigns the shift once
     assert.strictEqual(request.shiftIndex, 3);
 });
 
+test('submit resets typed min and max to MIN and MAX', () => {
+    const request = new StatsRequest();
+    request.lowInput = 'min';
+    request.highInput = 'mAx';
+    request.submit(0);
+    assert.strictEqual(request.lowInput, 'MIN');
+    assert.strictEqual(request.highInput, 'MAX');
+});
+
 test('parseRollBound reads min in any case as MIN', () => {
     assert.strictEqual(parseRollBound(' mIn '), 'MIN');
 });

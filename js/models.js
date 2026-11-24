@@ -99,6 +99,9 @@ class StatsRequest {
             throw new Error(`Cannot submit the range ${this.lowInput} to ${this.highInput}.`);
         }
         this.submittedBounds = {low, high};
+        // rewrite the inputs the way the bounds read, so a typed min shows as MIN
+        this.lowInput = String(low);
+        this.highInput = String(high);
         if (this.shiftIndex === null) {
             this.shiftIndex = shiftIndex;
         }
