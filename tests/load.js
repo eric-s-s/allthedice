@@ -4,7 +4,7 @@ const vm = require('node:vm');
 
 function loadScripts(fileNames, names) {
     for (const fileName of fileNames) {
-        const filePath = path.join(__dirname, '..', fileName);
+        const filePath = path.join(__dirname, '..', 'js', fileName);
         vm.runInThisContext(fs.readFileSync(filePath, 'utf8'), {filename: filePath});
     }
     return vm.runInThisContext(`({${names.join(', ')}})`);

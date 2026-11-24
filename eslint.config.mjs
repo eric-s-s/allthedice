@@ -18,7 +18,7 @@ export default [
     {
         // the app's scripts are loaded by script tags and share one global scope, so a function defined in one
         // file is used in another. tsc (make typecheck) already reports undefined names across files.
-        files: ['*.js'],
+        files: ['js/**/*.js'],
         languageOptions: {
             sourceType: 'script',
             globals: globals.browser,

@@ -46,7 +46,7 @@ async function openPage(
 
     const context = dom.getInternalVMContext();
     for (const fileName of pageScripts) {
-        const filePath = path.join(repoRoot, fileName);
+        const filePath = path.join(repoRoot, 'js', fileName);
         vm.runInContext(fs.readFileSync(filePath, 'utf8'), context, {filename: filePath});
     }
     await new Promise(resolve => window.document.addEventListener('DOMContentLoaded', resolve));

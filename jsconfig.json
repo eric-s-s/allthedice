@@ -7,16 +7,5 @@
     "lib": ["dom", "es2023"],
     "types": []
   },
-  "include": [
-    "scinum.js",
-    "statsmaker.js",
-    "roller.js",
-    "plothelpers.js",
-    "colors.js",
-    "config.js",
-    "models.js",
-    "fetch-dice-tables.js",
-    "interface.js",
-    "globals.d.ts"
-  ]
+  "include": ["js/*.js", "globals.d.ts"]
 }
