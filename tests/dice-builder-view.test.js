@@ -99,6 +99,14 @@ test('the collection modifier + button previews Modifier(1)', async () => {
     assert.strictEqual(getPreview(builder), 'Modifier(1)');
 });
 
+test('the custom die modifier - button steps it below 0', async () => {
+    const page = await openPageWithDie6();
+    const builder = page.openBuilder(getFirstRow(page));
+    choose(page, builder.querySelector('[name=customKind]'), 'ModDie');
+    press(builder, '[name=customModifierDown]');
+    assert.strictEqual(builder.querySelector('[name=customModifier]').value, '-1');
+});
+
 test('Done is disabled for an empty builder', async () => {
     const page = await openPageWithDie6();
     const builder = page.openBuilder(getFirstRow(page));

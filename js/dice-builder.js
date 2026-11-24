@@ -86,6 +86,14 @@ class CustomDieDraft {
         }
     }
 
+    /**
+     * Any whole number. Invalid text steps as 0.
+     * @param {number} delta
+     */
+    stepModifier(delta) {
+        this.modifierInput = stepWholeNumber(this.modifierInput, delta);
+    }
+
     /** @returns {number | null} */
     getSides() {
         return limitWholeNumber(this.sidesInput, 1, this.isWeighted ? maxWeightedSides : Infinity);

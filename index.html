@@ -9,7 +9,7 @@
     <meta name="author" content="Eric Shaw">
     <meta property="og:image" content="images/tons_o_dice.jpg">
     <link rel="icon" href="images/d6_3.ico">
-    <link rel="stylesheet" href="styles.css?v=aef9d63d">
+    <link rel="stylesheet" href="styles.css?v=7a12a7f6">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/4.2.0/plotly.min.js"
             integrity="sha384-F4AdcRk3NYRZZUZ7qARRp/wPkwvdta756IMuHDAZcmtM5nuHKykTbDJd7N9h+Qff"
@@ -21,11 +21,11 @@
     <script src="js/colors.js?v=79646e83" defer></script>
     <script src="js/config.js?v=4ebdfb43" defer></script>
     <script src="js/models.js?v=2c3c7aa5" defer></script>
-    <script src="js/dice-builder.js?v=19f71de9" defer></script>
+    <script src="js/dice-builder.js?v=c712ea93" defer></script>
     <script src="js/build-string-parser.js?v=893d4b91" defer></script>
     <script src="js/fetch-dice-tables.js?v=c555cd71" defer></script>
     <script src="js/request-views.js?v=3fde4dd9" defer></script>
-    <script src="js/dice-builder-view.js?v=a4d774b4" defer></script>
+    <script src="js/dice-builder-view.js?v=9a7a8168" defer></script>
     <script src="js/interface.js?v=04afc3b7" defer></script>
 </head>
 <body>
@@ -232,9 +232,14 @@
             <label>Sides
                 <input type="text" name="customSides" inputmode="numeric" autocomplete="off" spellcheck="false">
             </label>
-            <label class="builderCustomModifier">Modifier
-                <input type="text" name="customModifier" autocomplete="off" spellcheck="false">
-            </label>
+            <span class="builderCustomModifier">Modifier
+                <button type="button" class="iconButton stepButton" name="customModifierDown"
+                        aria-label="Step custom die modifier down">&minus;</button>
+                <input type="text" name="customModifier" aria-label="Custom die modifier" autocomplete="off"
+                       spellcheck="false">
+                <button type="button" class="iconButton stepButton" name="customModifierUp"
+                        aria-label="Step custom die modifier up">+</button>
+            </span>
         </div>
         <div class="builderWeights" role="group" aria-label="Weight of each face"></div>
         <button type="button" class="secondary builderAddCustom" name="addCustom">Add custom die</button>

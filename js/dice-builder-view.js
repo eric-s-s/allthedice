@@ -76,6 +76,16 @@ class DiceBuilderView {
             this.update(session);
         });
         /** @type {[string, number][]} */
+        const customModifierSteps = [['customModifierDown', -1], ['customModifierUp', 1]];
+        for (const [name, delta] of customModifierSteps) {
+            const button = /** @type {HTMLButtonElement} */ (findNamed(this.element, name));
+            onPressAndHold(button, () => {
+                const session = this.getOpenSession();
+                session.builder.draft.stepModifier(delta);
+                this.update(session);
+            });
+        }
+        /** @type {[string, number][]} */
         const modifierSteps = [['modifierDown', -1], ['modifierUp', 1]];
         for (const [name, delta] of modifierSteps) {
             const button = /** @type {HTMLButtonElement} */ (findNamed(this.element, name));

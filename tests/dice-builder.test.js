@@ -191,6 +191,12 @@ test('setSides leaves the weights alone for invalid text', () => {
     assert.strictEqual(draft.weightInputs.length, 6);
 });
 
+test('the draft\'s stepModifier steps below 0', () => {
+    const draft = new CustomDieDraft();
+    draft.stepModifier(-1);
+    assert.strictEqual(draft.modifierInput, '-1');
+});
+
 test('toDie gives null when every weight is 0', () => {
     const draft = new CustomDieDraft();
     draft.kind = 'WeightedDie';

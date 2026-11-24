@@ -182,6 +182,7 @@ keep values.</p>
     <li><code>setSides(text)</code> sets <code>sidesInput</code>. When the text is a whole number from 1 to 100, it
         resizes <code>weightInputs</code> to that length: it keeps the weights that are still in range, and new sides
         start at <code>'1'</code>. Other text leaves <code>weightInputs</code> alone.</li>
+    <li><code>stepModifier(delta)</code>: any whole number. Invalid text steps as 0.</li>
     <li><code>toDie()</code> returns a <code>BuilderDie</code> for the current kind, or <code>null</code> when a box
         the kind uses breaks a limit.</li>
 </ul>
@@ -259,8 +260,9 @@ it: <code>toBuildString</code> and the <code>…ToBuildString</code> functions s
             <li>An unreadable note, <code>&lt;p class="builderUnreadableNote" hidden&gt;</code>: "Done will replace
                 <code>…</code>", filled with <code>unreadableText</code>.</li>
             <li><b>Add a die:</b> the seven preset buttons, each with <code>data-sides</code>.</li>
-            <li><b>Custom die:</b> a kind <code>&lt;select&gt;</code>, a Sides box, a Modifier box (shown for
-                <code>ModDie</code> and <code>ModWeightedDie</code>), a weights area (shown for the weighted kinds) with
+            <li><b>Custom die:</b> a kind <code>&lt;select&gt;</code>, a Sides box, a Modifier group of − / box / +
+                (shown for <code>ModDie</code> and <code>ModWeightedDie</code>; a <code>&lt;span&gt;</code>, not a
+                <code>&lt;label&gt;</code>, so it doesn't label the − button), a weights area (shown for the weighted kinds) with
                 one box per side labelled by its face, and then an <b>Add custom die</b> button. The button is disabled
                 while <code>draft.toDie()</code> is <code>null</code>.</li>
             <li><b>Your dice:</b> <code>&lt;div class="builderParts"&gt;</code>, plus an empty note when there are no
@@ -278,7 +280,8 @@ it: <code>toBuildString</code> and the <code>…ToBuildString</code> functions s
     <li>Every number box is <code>type="text"</code>, for the same reason as the stats boxes: a number box reports
         <code>''</code> for half-typed text like <code>-</code>, so the model couldn't keep the raw text. Boxes that
         can't be negative get <code>inputmode="numeric"</code>, which gives phones the number pad. The die modifier box
-        doesn't, because the number pad has no minus sign. The collection modifier has − / + buttons instead.</li>
+        doesn't, because the iPhone number pad has no minus sign. Both modifiers have − / + buttons instead, so
+        most changes don't need the keyboard.</li>
     <li>Every box and select is labelled. The fixed ones in the dialog use a wrapping <code>&lt;label&gt;</code> or
         <code>aria-labelledby</code>. The ones made per part or per face get an <code>aria-label</code> naming the
         die or face (for example "Count of Die(6)", "Weight of face 3").</li>
@@ -326,7 +329,7 @@ it: <code>toBuildString</code> and the <code>…ToBuildString</code> functions s
         <code>update(session)</code>. Only the modal shows the builder, so the plot, stats and roller aren't redrawn,
         and Plotly doesn't re-plot on every keystroke.</li>
     <li>The constructor attaches the listeners for the fixed controls: the presets, the custom die form, Add custom
-        die, and the collection modifier box and steppers (through <code>onPressAndHold</code>).</li>
+        die, and both modifiers' boxes and steppers (through <code>onPressAndHold</code>).</li>
     <li>Every listener in the modal lives in <code>DiceBuilderView</code>. Part rows are kept in a
         <code>Map</code> and synced with <code>syncViews</code> by part id. A <code>BuilderPartView</code> only
         draws: its constructor clones the template and sets the labels, and <code>update(part)</code> writes the
@@ -450,6 +453,7 @@ after it, and <code>js/dice-builder-view.js</code> after <code>request-views.js<
             <li><code>setSides</code> adds new weights as 1.</li>
             <li><code>setSides</code> keeps the weights still in range.</li>
             <li><code>setSides</code> leaves the weights alone for invalid text.</li>
+            <li><code>stepModifier</code> steps below 0.</li>
             <li><code>toDie</code> gives <code>null</code> when every weight is 0.</li>
             <li><code>toDie</code> gives <code>null</code> for more than 100 weighted sides.</li>
             <li><code>toDie</code> ignores the weights for a <code>Die</code>.</li>
@@ -492,6 +496,7 @@ file is already long.</p>
     <li>Choosing Best of pool shows the Pool and Keep boxes.</li>
     <li>Choosing WeightedDie with 4 sides shows four weight boxes.</li>
     <li>The collection modifier's + button previews <code>Modifier(1)</code>.</li>
+    <li>The custom die modifier's − button steps it below 0.</li>
     <li>Done is disabled for an empty builder.</li>
     <li>Done is disabled while a box is invalid, and that box is marked <code>aria-invalid</code>.</li>
     <li>Done writes the build string into the row.</li>
