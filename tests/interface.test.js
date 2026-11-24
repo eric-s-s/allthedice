@@ -563,6 +563,59 @@ test('- on a box holding MAX pins it to the highest roll', async () => {
     assert.strictEqual(statsRequest.elements.high.value, '6');
 });
 
+function pointerEvent(page, type, init = {}) {
+    return new page.window.MouseEvent(type, {bubbles: true, button: 0, ...init});
+}
+
+async function openPageToHoldLowUp() {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(101)');
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.low, '50');
+    return {
+        page,
+        low: statsRequest.elements.low,
+        lowUp: statsRequest.elements.lowUp,
+        holdDelayMs: page.window.eval('holdDelayMs'),
+        holdRepeatMs: page.window.eval('holdRepeatMs'),
+    };
+}
+
+test('pressing and releasing a step button steps once', async () => {
+    const {page, low, lowUp} = await openPageToHoldLowUp();
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerdown'));
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerup'));
+    lowUp.dispatchEvent(pointerEvent(page, 'click', {detail: 1}));
+    assert.strictEqual(low.value, '51');
+});
+
+test('holding a step button repeats it after a delay', async () => {
+    const {page, low, lowUp, holdDelayMs, holdRepeatMs} = await openPageToHoldLowUp();
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerdown'));
+    page.clock.tick(holdDelayMs - 1);
+    assert.strictEqual(low.value, '51');
+    page.clock.tick(1 + 2 * holdRepeatMs);
+    assert.strictEqual(low.value, '54');
+});
+
+test('releasing a held step button stops it', async () => {
+    const {page, low, lowUp, holdDelayMs} = await openPageToHoldLowUp();
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerdown'));
+    page.clock.tick(holdDelayMs);
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerup'));
+    page.clock.tick(10 * holdDelayMs);
+    assert.strictEqual(low.value, '52');
+});
+
+test('a held step button stops when the pointer leaves it', async () => {
+    const {page, low, lowUp, holdDelayMs} = await openPageToHoldLowUp();
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerdown'));
+    page.clock.tick(holdDelayMs);
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerleave'));
+    page.clock.tick(10 * holdDelayMs);
+    assert.strictEqual(low.value, '52');
+});
+
 test('stepping does not recalculate the stats row', async () => {
     const page = await openPageWithKnownTables();
     await loadDiceTable(page, 'Die(6)');

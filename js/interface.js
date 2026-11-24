@@ -68,7 +68,7 @@ class StatsRequestView {
         ];
         for (const [name, bound, delta] of stepButtons) {
             const button = /** @type {HTMLButtonElement} */ (this.element.elements.namedItem(name));
-            button.addEventListener('click', () => actions.step(bound, delta));
+            onPressAndHold(button, () => actions.step(bound, delta));
         }
 
         this.low.addEventListener('input', () => {
@@ -89,6 +89,45 @@ class StatsRequestView {
         setInputValue(this.low, model.lowInput);
         setInputValue(this.high, model.highInput);
     }
+}
+
+/** how long a step button is held before it starts repeating */
+const holdDelayMs = 500;
+/** how often a held step button repeats */
+const holdRepeatMs = 70;
+
+/**
+ * Runs the action when the button is pressed, then again and again while a pointer holds it down.
+ * A click from a pointer is skipped because pressing already ran the action; a click from the keyboard
+ * (detail 0) runs it.
+ * @param {HTMLButtonElement} button
+ * @param {() => void} action
+ */
+function onPressAndHold(button, action) {
+    /** @type {number | undefined} */
+    let timer;
+    const stop = () => clearTimeout(timer);
+    const repeat = () => {
+        action();
+        timer = setTimeout(repeat, holdRepeatMs);
+    };
+    button.addEventListener('pointerdown', event => {
+        if (event.button !== 0) {
+            return;
+        }
+        stop();
+        action();
+        timer = setTimeout(repeat, holdDelayMs);
+    });
+    for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
+        button.addEventListener(type, stop);
+    }
+    button.addEventListener('click', event => {
+        if (event.detail === 0) {
+            action();
+        }
+    });
+    button.addEventListener('contextmenu', event => event.preventDefault());
 }
 
 /**

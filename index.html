@@ -9,7 +9,7 @@
     <meta name="author" content="Eric Shaw">
     <meta property="og:image" content="images/tons_o_dice.jpg">
     <link rel="icon" href="images/d6_3.ico">
-    <link rel="stylesheet" href="styles.css?v=3780311d">
+    <link rel="stylesheet" href="styles.css?v=8127df5f">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/4.2.0/plotly.min.js"
             integrity="sha384-F4AdcRk3NYRZZUZ7qARRp/wPkwvdta756IMuHDAZcmtM5nuHKykTbDJd7N9h+Qff"
@@ -22,7 +22,7 @@
     <script src="js/config.js?v=4ebdfb43" defer></script>
     <script src="js/models.js?v=4ed84553" defer></script>
     <script src="js/fetch-dice-tables.js?v=c555cd71" defer></script>
-    <script src="js/interface.js?v=24120ad3" defer></script>
+    <script src="js/interface.js?v=f5207ebc" defer></script>
 </head>
 <body>
 <main>
@@ -216,18 +216,18 @@
 <template id="statsRequestTemplate">
     <form class="statsRequest">
         <span class="rollBound">From
-            <button type="button" class="iconButton" name="lowDown" aria-label="Step From down">&minus;</button>
+            <button type="button" class="iconButton stepButton" name="lowDown" aria-label="Step From down">&minus;</button>
             <input type="text" name="low" aria-label="From" list="rollBounds" required
                    pattern="[Mm][Ii][Nn]|[Mm][Aa][Xx]|-?[0-9]+" title="MIN, MAX, or a whole number"
                    autocomplete="off" spellcheck="false">
-            <button type="button" class="iconButton" name="lowUp" aria-label="Step From up">+</button>
+            <button type="button" class="iconButton stepButton" name="lowUp" aria-label="Step From up">+</button>
         </span>
         <span class="rollBound">to
-            <button type="button" class="iconButton" name="highDown" aria-label="Step to down">&minus;</button>
+            <button type="button" class="iconButton stepButton" name="highDown" aria-label="Step to down">&minus;</button>
             <input type="text" name="high" aria-label="to" list="rollBounds" required
                    pattern="[Mm][Ii][Nn]|[Mm][Aa][Xx]|-?[0-9]+" title="MIN, MAX, or a whole number"
                    autocomplete="off" spellcheck="false">
-            <button type="button" class="iconButton" name="highUp" aria-label="Step to up">+</button>
+            <button type="button" class="iconButton stepButton" name="highUp" aria-label="Step to up">+</button>
         </span>
         <button type="submit" class="primary">Calculate</button>
         <button type="button" class="iconButton remove" aria-label="Remove range"

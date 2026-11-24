@@ -409,6 +409,14 @@ input[type=text] {
     width: 7em;
 }
 
+/* holding a step button repeats it, so a long press must not select text, zoom or open a menu */
+.stepButton {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
 #statsEmpty {
     margin-top: 12px;
 }
