@@ -473,49 +473,6 @@ function makeRollerRow(diceTableRequest) {
 }
 
 /**
- * @param {string} buildString
- * @returns {Promise<DiceTable>}
- */
-async function fetchDiceTable(buildString) {
-    let response;
-    try {
-        // a plain-text body keeps this a "simple" cross-origin request (no preflight)
-        response = await fetch(getLambdaEndpoint(), {
-            method: 'POST',
-            body: JSON.stringify({buildString}),
-        });
-    } catch (error) {
-        throw new Error(`Could not reach the dice server at ${getLambdaEndpoint()}.`, {cause: error});
-    }
-    const body = await parseJsonOrNull(response);
-    if (!response.ok) {
-        const serverError = /** @type {{errorType?: string, errorMessage?: string} | null} */ (body);
-        if (serverError && serverError.errorMessage) {
-            throw new Error(serverError.errorType
-                ? `${serverError.errorType}: ${serverError.errorMessage}`
-                : serverError.errorMessage);
-        }
-        throw new Error(`The dice server answered ${response.status} ${response.statusText}.`);
-    }
-    if (body === null) {
-        throw new Error('The dice server sent a response that was not JSON.');
-    }
-    return parseDiceTable(body);
-}
-
-/**
- * @param {Response} response
- * @returns {Promise<unknown>}
- */
-async function parseJsonOrNull(response) {
-    try {
-        return await response.json();
-    } catch {
-        return null;
-    }
-}
-
-/**
  * @param {LoadedDiceTableRequest[]} diceTableRequests
  * @returns {RollRange}
  */
