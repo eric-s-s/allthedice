@@ -6,7 +6,7 @@ const {JSDOM} = require('jsdom');
 const repoRoot = path.join(__dirname, '..');
 const pageScripts = [
     'scinum.js', 'statsmaker.js', 'roller.js', 'plothelpers.js', 'colors.js', 'config.js', 'models.js',
-    'fetch-dice-tables.js', 'interface.js',
+    'fetch-dice-tables.js', 'request-views.js', 'interface.js',
 ];
 
 async function openPage(
@@ -44,13 +44,17 @@ async function openPage(
         },
     });
 
+    const clock = fakeClock();
+    window.setTimeout = clock.setTimeout;
+    window.clearTimeout = clock.clearTimeout;
+
     const context = dom.getInternalVMContext();
     for (const fileName of pageScripts) {
         const filePath = path.join(repoRoot, 'js', fileName);
         vm.runInContext(fs.readFileSync(filePath, 'utf8'), context, {filename: filePath});
     }
     await new Promise(resolve => window.document.addEventListener('DOMContentLoaded', resolve));
-    return {window, document: window.document, lambda, plotly, queuedRandomBytes, ...pageActions(window)};
+    return {window, document: window.document, lambda, plotly, queuedRandomBytes, clock, ...pageActions(window)};
 }
 
 function pageActions(window) {
@@ -83,6 +87,37 @@ async function settle() {
     for (let i = 0; i < 5; i++) {
         await new Promise(resolve => setTimeout(resolve, 0));
     }
+}
+
+/** Stands in for the page's timers. Nothing runs until tick moves the time forward. */
+function fakeClock() {
+    let now = 0;
+    let lastId = 0;
+    const timers = new Map();
+    return {
+        setTimeout(callback, delay = 0) {
+            lastId++;
+            timers.set(lastId, {callback, at: now + delay});
+            return lastId;
+        },
+        clearTimeout(id) {
+            timers.delete(id);
+        },
+        tick(ms) {
+            const end = now + ms;
+            for (;;) {
+                const due = [...timers].filter(([, timer]) => timer.at <= end);
+                if (due.length === 0) {
+                    break;
+                }
+                const [id, timer] = due.reduce((first, next) => next[1].at < first[1].at ? next : first);
+                timers.delete(id);
+                now = timer.at;
+                timer.callback();
+            }
+            now = end;
+        },
+    };
 }
 
 function fakePlotly() {

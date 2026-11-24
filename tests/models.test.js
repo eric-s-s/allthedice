@@ -3,9 +3,9 @@ const assert = require('node:assert');
 const {loadScripts} = require('./load.js');
 const {makeDieTable} = require('./page.js');
 
-const {parseDiceTable, DiceTableRequest, StatsRequest} = loadScripts(
+const {parseDiceTable, DiceTableRequest, StatsRequest, isPartialRollBound, parseRollBound, stepRollBound} = loadScripts(
     ['roller.js', 'plothelpers.js', 'models.js', 'fetch-dice-tables.js'],
-    ['parseDiceTable', 'DiceTableRequest', 'StatsRequest'],
+    ['parseDiceTable', 'DiceTableRequest', 'StatsRequest', 'isPartialRollBound', 'parseRollBound', 'stepRollBound'],
 );
 
 function makeDiceTable(sides = 3) {
@@ -80,26 +80,139 @@ test('roll throws when nothing is loaded', () => {
     assert.throws(() => new DiceTableRequest().roll(), /not loaded/);
 });
 
-test('a new stats request has blank inputs and nothing submitted', () => {
+test('a new stats request starts as MIN to MAX with nothing submitted', () => {
     const request = new StatsRequest();
     assert.strictEqual(typeof request.id, 'string');
     assert.notStrictEqual(request.id, new StatsRequest().id);
-    assert.strictEqual(request.lowInput, '');
-    assert.strictEqual(request.highInput, '');
-    assert.strictEqual(request.submittedRange, null);
+    assert.strictEqual(request.lowInput, 'MIN');
+    assert.strictEqual(request.highInput, 'MAX');
+    assert.strictEqual(request.submittedBounds, null);
     assert.strictEqual(request.shiftIndex, null);
 });
 
-test('submit parses and sorts the inputs and assigns the shift once', () => {
+test('submit stores the bounds as typed and unsorted, and assigns the shift once', () => {
     const request = new StatsRequest();
     request.lowInput = '5';
     request.highInput = '2';
     request.submit(3);
-    assert.deepStrictEqual(request.submittedRange, {low: 2, high: 5});
+    assert.deepStrictEqual(request.submittedBounds, {low: 5, high: 2});
     assert.strictEqual(request.shiftIndex, 3);
 
-    request.lowInput = '1';
+    request.lowInput = 'max';
     request.submit(8);
-    assert.deepStrictEqual(request.submittedRange, {low: 1, high: 2});
+    assert.deepStrictEqual(request.submittedBounds, {low: 'MAX', high: 2});
     assert.strictEqual(request.shiftIndex, 3);
+});
+
+test('submit resets typed min and max to MIN and MAX', () => {
+    const request = new StatsRequest();
+    request.lowInput = 'min';
+    request.highInput = 'mAx';
+    request.submit(0);
+    assert.strictEqual(request.lowInput, 'MIN');
+    assert.strictEqual(request.highInput, 'MAX');
+});
+
+test('isPartialRollBound accepts the start of MIN, MAX or a whole number', () => {
+    for (const text of ['', '-', '-1', '12', 'm', 'Mi', 'MIN', 'ma', 'mAX']) {
+        assert.strictEqual(isPartialRollBound(text), true, text);
+    }
+});
+
+test('isPartialRollBound rejects text that cannot become MIN, MAX or a whole number', () => {
+    for (const text of ['5a', 'mx', '1.5', 'minn', ' 5', '--1', '1-']) {
+        assert.strictEqual(isPartialRollBound(text), false, text);
+    }
+});
+
+test('parseRollBound reads min in any case as MIN', () => {
+    assert.strictEqual(parseRollBound(' mIn '), 'MIN');
+});
+
+test('parseRollBound reads max in any case as MAX', () => {
+    assert.strictEqual(parseRollBound('Max'), 'MAX');
+});
+
+test('parseRollBound reads a whole number', () => {
+    assert.strictEqual(parseRollBound(' -12 '), -12);
+});
+
+test('parseRollBound returns null for other text', () => {
+    for (const text of ['', 'minimum', '1.5', '3a']) {
+        assert.strictEqual(parseRollBound(text), null);
+    }
+});
+
+/**
+ * @param {string} low
+ * @param {string} high
+ */
+function makeSubmittedStatsRequest(low, high) {
+    const request = new StatsRequest();
+    request.lowInput = low;
+    request.highInput = high;
+    request.submit(0);
+    return request;
+}
+
+const rollLimits = {low: 3, high: 18};
+
+test('resolveRange replaces MIN with the lowest roll', () => {
+    assert.deepStrictEqual(makeSubmittedStatsRequest('MIN', '10').resolveRange(rollLimits), {low: 3, high: 10});
+});
+
+test('resolveRange replaces MAX with the highest roll', () => {
+    assert.deepStrictEqual(makeSubmittedStatsRequest('10', 'MAX').resolveRange(rollLimits), {low: 10, high: 18});
+});
+
+test('resolveRange sorts reversed bounds', () => {
+    assert.deepStrictEqual(makeSubmittedStatsRequest('MAX', '10').resolveRange(rollLimits), {low: 10, high: 18});
+});
+
+test('snapToRollLimits turns a number below the lowest roll into MIN', () => {
+    const request = makeSubmittedStatsRequest('2', '10');
+    request.snapToRollLimits(rollLimits);
+    assert.strictEqual(request.lowInput, 'MIN');
+    assert.deepStrictEqual(request.submittedBounds, {low: 'MIN', high: 10});
+});
+
+test('snapToRollLimits turns a number above the highest roll into MAX', () => {
+    const request = makeSubmittedStatsRequest('10', '19');
+    request.snapToRollLimits(rollLimits);
+    assert.strictEqual(request.highInput, 'MAX');
+    assert.deepStrictEqual(request.submittedBounds, {low: 10, high: 'MAX'});
+});
+
+test('snapToRollLimits keeps an in-range number', () => {
+    const request = makeSubmittedStatsRequest('3', '18');
+    request.snapToRollLimits(rollLimits);
+    assert.strictEqual(request.lowInput, '3');
+    assert.strictEqual(request.highInput, '18');
+    assert.deepStrictEqual(request.submittedBounds, {low: 3, high: 18});
+});
+
+test('stepRollBound adds 1 to a number', () => {
+    assert.strictEqual(stepRollBound('7', 1, rollLimits), '8');
+});
+
+test('stepRollBound subtracts 1 from a number', () => {
+    assert.strictEqual(stepRollBound('7', -1, rollLimits), '6');
+});
+
+test('stepRollBound steps up from MIN to the lowest roll', () => {
+    assert.strictEqual(stepRollBound('MIN', 1, rollLimits), '3');
+});
+
+test('stepRollBound steps down from MAX to the highest roll', () => {
+    assert.strictEqual(stepRollBound('MAX', -1, rollLimits), '18');
+});
+
+test('stepRollBound turns empty or half-typed text into MIN', () => {
+    for (const text of ['', '-', 'mi', 'ma']) {
+        assert.strictEqual(stepRollBound(text, 1, rollLimits), 'MIN', text);
+    }
+});
+
+test('stepRollBound leaves MIN unchanged when no tables are loaded', () => {
+    assert.strictEqual(stepRollBound('MIN', 1, null), 'MIN');
 });

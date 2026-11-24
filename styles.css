@@ -89,8 +89,7 @@ button {
     color: inherit;
 }
 
-input[type=text],
-input[type=number] {
+input[type=text] {
     min-width: 0;
     padding: 7px 10px;
     font: inherit;
@@ -399,7 +398,7 @@ input[type=text] {
     margin-bottom: 8px;
 }
 
-.statsRequest label {
+.statsRequest .rollBound {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -408,6 +407,14 @@ input[type=text] {
 
 .statsRequest input {
     width: 7em;
+}
+
+/* holding a step button repeats it, so a long press must not select text, zoom or open a menu */
+.stepButton {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
 }
 
 #statsEmpty {
@@ -499,8 +506,7 @@ input[type=text] {
     }
 
     /* Safari on iPhone zooms the page into any input with text under 16px */
-    input[type=text],
-    input[type=number] {
+    input[type=text] {
         font-size: 16px;
     }
 

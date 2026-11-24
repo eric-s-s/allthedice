@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stats MIN/MAX Spec</title>
+<style>
+    :root {
+        --bg: #ffffff;
+        --text: #1f2328;
+        --muted: #59636e;
+        --border: #d1d9e0;
+        --code-bg: #f3f4f6;
+        --accent: #0969da;
+        --note-bg: #eef5ff;
+        color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg: #0d1117;
+            --text: #e6edf3;
+            --muted: #9198a1;
+            --border: #3d444d;
+            --code-bg: #161b22;
+            --accent: #4493f8;
+            --note-bg: #12233a;
+        }
+    }
+    body {
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 2rem 16px 4rem;
+    }
+    main { max-width: 52rem; margin: 0 auto; }
+    h1 { margin-bottom: 0.25rem; }
+    h2 { margin-top: 2.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 1.75rem; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .note { background: var(--note-bg); border-left: 4px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+    pre { background: var(--code-bg); padding: 0.9rem 1rem; border-radius: 6px; overflow-x: auto; }
+    pre code { background: none; padding: 0; }
+    .tableWrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+    th { background: var(--code-bg); }
+    a { color: var(--accent); }
+    nav ol { padding-left: 1.25rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Stats MIN/MAX Spec</h1>
+<p class="subtitle">Let each end of a stats range follow the lowest or highest roll (<code>MIN</code> /
+<code>MAX</code>), or be pinned to a number.</p>
+
+<p class="note"><strong>Snap rule:</strong> a pinned number below the lowest roll becomes <code>MIN</code>, and one
+above the highest roll becomes <code>MAX</code>. It changes both the box and the submitted range, and it runs on every
+render.</p>
+
+<nav>
+<ol>
+    <li><a href="#goals">Goals</a></li>
+    <li><a href="#models">Data models</a></li>
+    <li><a href="#views">Views</a></li>
+    <li><a href="#wiring">Connecting views to models</a></li>
+    <li><a href="#behavior">Behavior changes</a></li>
+    <li><a href="#tests">Tests</a></li>
+    <li><a href="#checks">Checks</a></li>
+    <li><a href="#questions">Decisions and open questions</a></li>
+</ol>
+</nav>
+
+<h2 id="goals">1. Goals</h2>
+<ol>
+    <li>Each end of a stats range is either <code>MIN</code>, <code>MAX</code>, or a pinned whole number.</li>
+    <li>New ranges start as <code>MIN</code> to <code>MAX</code>.</li>
+    <li><code>MIN</code> always means the lowest roll of the loaded dice tables, and <code>MAX</code> the highest. A
+        submitted range that uses them re-labels and re-shades by itself when tables load or are removed, without being
+        submitted again.</li>
+    <li>A pinned number stays put until it falls outside the rolls the loaded tables can make. Then it snaps to
+        <code>MIN</code> or <code>MAX</code>.</li>
+    <li>The user can still step a value by 1, as the number spinner allows today. Pressing − on a box holding the
+        lowest roll changes it to <code>MIN</code>, and pressing + on a box holding the highest roll changes it to
+        <code>MAX</code>, so the buttons can get back to following. Pressing + on <code>MIN</code> pins the lowest
+        roll, and pressing − on <code>MAX</code> pins the highest roll.</li>
+</ol>
+<p><strong>Out of scope:</strong> the Lambda API, dice table requests, colors and shift indexes, the roller, and the
+summary rows (Range, Mean, Std dev).</p>
+
+<h2 id="models">2. Data models (<code>models.js</code>)</h2>
+
+<h3><code>RollBound</code></h3>
+<pre><code>/** @typedef {number | 'MIN' | 'MAX'} RollBound */</code></pre>
+
+<h3>Functions</h3>
+<div class="tableWrap"><table>
+    <tr><th>function</th><th>returns</th><th>notes</th></tr>
+    <tr><td><code>parseRollBound(text)</code></td><td><code>RollBound | null</code></td>
+        <td>Trims the text. <code>min</code>/<code>max</code> in any case give <code>'MIN'</code>/<code>'MAX'</code>,
+            and a whole number gives that number. Anything else gives <code>null</code>.</td></tr>
+    <tr><td><code>stepRollBound(text, delta, rollLimits)</code></td><td><code>string</code>: the new box text</td>
+        <td>A number becomes number + <code>delta</code>. <code>MIN</code> and <code>MAX</code> step from just outside
+            the rolls: <code>MIN</code> + 1 gives the lowest roll, and <code>MAX</code> − 1 gives the highest. Unparseable
+            text, and <code>MIN</code>/<code>MAX</code> while <code>rollLimits</code> is <code>null</code>, come back
+            unchanged. It doesn't snap: <code>MIN</code> − 1 returns lowest − 2, and the render that follows snaps that
+            back to <code>MIN</code>.</td></tr>
+</table></div>
+
+<h3><code>StatsRequest</code></h3>
+<div class="tableWrap"><table>
+    <tr><th>field</th><th>type</th><th>notes</th></tr>
+    <tr><td><code>id</code></td><td><code>string</code></td><td>unchanged</td></tr>
+    <tr><td><code>lowInput</code>, <code>highInput</code></td><td><code>string</code></td>
+        <td>the raw box text. Now defaults to <code>'MIN'</code> / <code>'MAX'</code> instead of blank</td></tr>
+    <tr><td><code>submittedBounds</code></td><td><code>{low: RollBound, high: RollBound} | null</code></td>
+        <td>replaces <code>submittedRange</code>. Stored as typed and <strong>not</strong> sorted, because
+            <code>MIN</code>/<code>MAX</code> are only known at render</td></tr>
+    <tr><td><code>shiftIndex</code></td><td><code>number | null</code></td><td>unchanged</td></tr>
+</table></div>
+<p>Methods:</p>
+<ul>
+    <li><code>submit(shiftIndex)</code> parses both inputs with <code>parseRollBound</code> and sets
+        <code>submittedBounds</code>. The form's <code>pattern</code> ensures only valid text reaches it. Shift
+        assignment is unchanged.</li>
+    <li><code>resolveRange(rollLimits)</code> returns a sorted <code>RollRange</code>, with <code>MIN</code> replaced by
+        <code>rollLimits.low</code> and <code>MAX</code> by <code>rollLimits.high</code>.</li>
+    <li><code>snapToRollLimits(rollLimits)</code> applies the snap rule to <code>lowInput</code>,
+        <code>highInput</code> and both <code>submittedBounds</code>. It leaves <code>MIN</code>, <code>MAX</code>,
+        in-range numbers and unparseable text alone.</li>
+</ul>
+<p>The <code>SubmittedStatsRequest</code> typedef and <code>isSubmittedStatsRequest</code> switch to
+<code>submittedBounds</code>. <code>getUnusedShiftIndex</code> in <code>colors.js</code> needs no change.</p>
+
+<h3>Derived values (computed in <code>render()</code>, never stored)</h3>
+<ul>
+    <li><code>rollLimits</code>: the lowest and highest rolls of the loaded tables, or <code>null</code> when none are
+        loaded. It's computed as it is today (<code>getLowestAndHighestRolls</code>), behind a small
+        <code>getRollLimits()</code> helper so the step action can use it too.</li>
+    <li><code>StatsRow.range</code>: each submitted request resolved once with <code>resolveRange(rollLimits)</code>.
+        The plot and the stats table read it instead of <code>statsRequest.submittedRange</code>.</li>
+</ul>
+
+<h2 id="views">3. Views</h2>
+
+<h3>Markup (<code>index.html</code>)</h3>
+<p>In <code>statsRequestTemplate</code>, each end becomes a group of a label, a − button, a text box and a + button:</p>
+<pre><code>&lt;span class="rollBound"&gt;From
+    &lt;button type="button" class="iconButton" name="lowDown" aria-label="Step From down"&gt;−&lt;/button&gt;
+    &lt;input type="text" name="low" aria-label="From" list="rollBounds" required
+           pattern="[Mm][Ii][Nn]|[Mm][Aa][Xx]|-?[0-9]+" title="MIN, MAX, or a whole number"
+           autocomplete="off" spellcheck="false"&gt;
+    &lt;button type="button" class="iconButton" name="lowUp" aria-label="Step From up"&gt;+&lt;/button&gt;
+&lt;/span&gt;</code></pre>
+<ul>
+    <li>The "to" group is the same, with <code>high</code>, <code>highDown</code> and <code>highUp</code> names.</li>
+    <li>It's a <code>&lt;span&gt;</code>, not a <code>&lt;label&gt;</code>. A label wrapping the buttons would label
+        the first button instead of the box, so <code>aria-label</code> names the box.</li>
+    <li>One <code>&lt;datalist id="rollBounds"&gt;</code> with <code>MIN</code> and <code>MAX</code> options is
+        shared by every box. It suggests the two words; it doesn't restrict what can be typed.</li>
+    <li><code>required</code> and <code>pattern</code> make the browser block a blank or invalid submit, as
+        <code>type="number"</code> blocks a blank one today.</li>
+</ul>
+
+<h3>Styles (<code>styles.css</code>)</h3>
+<ul>
+    <li>Rename <code>.statsRequest label</code> to <code>.statsRequest .rollBound</code>. Each group is a flex item,
+        so it stays together when the row wraps.</li>
+    <li>The step buttons reuse <code>.iconButton</code>, which is already 44px on phones.</li>
+    <li><code>.statsRequest input</code> widths are unchanged. The existing <code>input[type=text]</code> rules cover
+        the boxes.</li>
+</ul>
+
+<h3><code>StatsRequestView</code></h3>
+<ul>
+    <li>The constructor finds the four step buttons. Each one calls <code>actions.step(bound, delta)</code>, with
+        <code>bound</code> being <code>'low'</code> or <code>'high'</code> and <code>delta</code> being ±1.</li>
+    <li><code>update(model)</code> drops its <code>rollLimits</code> parameter and the <code>min</code>/<code>max</code>
+        attribute code. It still writes the box values only when they differ from the model.</li>
+</ul>
+
+<h2 id="wiring">4. Connecting views to models</h2>
+<ul>
+    <li><strong>Snapping:</strong> in <code>render()</code>, when <code>rollLimits</code> isn't <code>null</code>, call
+        <code>snapToRollLimits(rollLimits)</code> on every stats request before the views update. This replaces
+        <code>fillBlankStatsInputs</code>, which is deleted. Because it runs on every render, the same rule covers a
+        number typed and submitted out of range, a step past either end, and tables changing under a range that was
+        already submitted.</li>
+    <li><strong>Stepping:</strong> <code>onPageLoad</code> implements <code>step(bound, delta)</code>. It sets
+        <code>lowInput</code> or <code>highInput</code> to
+        <code>stepRollBound(input, delta, getRollLimits())</code> and calls <code>render()</code>. Stepping changes the
+        box only. Like the spinner today, it doesn't recalculate; Calculate does. Stepping past either end snaps:
+        with a lowest roll of 3, − on <code>3</code> gives <code>2</code>, which the render snaps to
+        <code>MIN</code>. Likewise, + on the highest roll gives <code>MAX</code>.</li>
+    <li><strong>Stats rows:</strong> <code>getStatsRows(loaded, rollLimits)</code> returns <code>[]</code> when
+        <code>rollLimits</code> is <code>null</code>. Otherwise it resolves each submitted request and stores the result
+        as <code>StatsRow.range</code>. <code>renderPlot</code> loops over the rows and then their cells, so each cell
+        uses its row's range. <code>renderStatsTable</code> labels the row from <code>range</code>.</li>
+</ul>
+
+<h2 id="behavior">5. Behavior changes</h2>
+<div class="tableWrap"><table>
+    <tr><th>today</th><th>after</th></tr>
+    <tr><td>Boxes start blank and are filled with the lowest and highest roll once, when a table loads</td>
+        <td>Boxes start as <code>MIN</code> and <code>MAX</code></td></tr>
+    <tr><td>A submitted range stays fixed when tables change</td>
+        <td>A <code>MIN</code>/<code>MAX</code> end follows the tables. A pinned end stays unless it falls out of
+            range</td></tr>
+    <tr><td>The browser blocks submitting a number outside the rolls (<code>min</code>/<code>max</code>
+        attributes)</td>
+        <td>The submit goes through, and the number snaps to <code>MIN</code>/<code>MAX</code></td></tr>
+    <tr><td>A pinned number can end up outside the rolls after tables change</td>
+        <td>It snaps to <code>MIN</code>/<code>MAX</code></td></tr>
+    <tr><td>Number boxes with a spinner, the Up/Down keys, and the phone number pad</td>
+        <td>Text boxes with a MIN/MAX dropdown and − / + buttons. Up/Down move through the dropdown, and phones show
+            the full keyboard</td></tr>
+</table></div>
+<p>Everything else stays the same: shift colors, the Calculate button, removing ranges, the "leave one blank range"
+rule, and the plot and table layout.</p>
+
+<h2 id="tests">6. Tests</h2>
+<p>One behavior per test.</p>
+
+<h3><code>tests/models.test.js</code></h3>
+<ul>
+    <li><strong>Update:</strong> the defaults test (<code>'MIN'</code> / <code>'MAX'</code>,
+        <code>submittedBounds</code> is <code>null</code>).</li>
+    <li><strong>Update:</strong> the submit test (bounds stored as typed and unsorted).</li>
+    <li><strong>Add:</strong>
+        <ul>
+            <li><code>parseRollBound</code> reads <code>min</code> as <code>MIN</code>.</li>
+            <li><code>parseRollBound</code> reads <code>max</code> as <code>MAX</code>.</li>
+            <li><code>parseRollBound</code> reads a whole number.</li>
+            <li><code>parseRollBound</code> returns <code>null</code> for other text.</li>
+            <li><code>resolveRange</code> replaces <code>MIN</code> with the lowest roll.</li>
+            <li><code>resolveRange</code> replaces <code>MAX</code> with the highest roll.</li>
+            <li><code>resolveRange</code> sorts reversed bounds.</li>
+            <li><code>snapToRollLimits</code> turns a number below the lowest roll into <code>MIN</code>.</li>
+            <li><code>snapToRollLimits</code> turns a number above the highest roll into <code>MAX</code>.</li>
+            <li><code>snapToRollLimits</code> keeps an in-range number.</li>
+            <li><code>stepRollBound</code> adds 1 to a number.</li>
+            <li><code>stepRollBound</code> subtracts 1 from a number.</li>
+            <li><code>stepRollBound</code> steps up from <code>MIN</code> to the lowest roll.</li>
+            <li><code>stepRollBound</code> steps down from <code>MAX</code> to the highest roll.</li>
+            <li><code>stepRollBound</code> leaves unparseable text unchanged.</li>
+            <li><code>stepRollBound</code> leaves <code>MIN</code> unchanged when no tables are loaded.</li>
+        </ul>
+    </li>
+</ul>
+
+<h3><code>tests/interface.test.js</code></h3>
+<ul>
+    <li><strong>Remove:</strong> <code>stats request inputs are limited to…</code> and <code>blank stats request
+        inputs are filled…</code>. They test behavior this spec removes.</li>
+    <li><strong>Add:</strong>
+        <ul>
+            <li>Stats inputs default to <code>MIN</code> and <code>MAX</code>.</li>
+            <li>Adding a stats row focuses its low input. This gets its own test because today the check is the last
+                assertion of <code>blank stats request inputs are filled…</code>
+                (<code>tests/interface.test.js:446</code>), which is being removed.</li>
+            <li>Following <code>MIN</code>: a submitted <code>MIN</code> end follows a newly loaded table with a lower
+                lowest roll (<code>Die(3)+10</code>, then <code>Die(3)</code>: <code>11 to 13</code> becomes
+                <code>1 to 13</code>).</li>
+            <li>Following <code>MAX</code>: a submitted <code>MAX</code> end follows a newly loaded table with a higher
+                highest roll (<code>Die(3)</code>, then <code>Die(3)+10</code>: <code>1 to 3</code> becomes
+                <code>1 to 13</code>).</li>
+            <li>A pinned low that drops below the lowest roll after a table is removed snaps to <code>MIN</code>.</li>
+            <li>A pinned high that rises above the highest roll after a table is removed snaps to <code>MAX</code>.</li>
+            <li>A number typed below the lowest roll snaps to <code>MIN</code> on submit.</li>
+            <li>A number typed above the highest roll snaps to <code>MAX</code> on submit.</li>
+            <li>The + button raises the box's value by 1.</li>
+            <li>The − button lowers the box's value by 1.</li>
+            <li>− on a box holding the lowest roll changes it to <code>MIN</code>.</li>
+            <li>+ on a box holding the highest roll changes it to <code>MAX</code>.</li>
+            <li>− on a box holding <code>MIN</code> leaves <code>MIN</code>.</li>
+            <li>+ on a box holding <code>MAX</code> leaves <code>MAX</code>.</li>
+            <li>+ on a box holding <code>MIN</code> pins it to the lowest roll.</li>
+            <li>− on a box holding <code>MAX</code> pins it to the highest roll.</li>
+            <li>Stepping doesn't recalculate the stats row.</li>
+        </ul>
+    </li>
+    <li><strong>Unchanged:</strong> <code>tests/colors.test.js:66</code> (it sets the inputs and submits) and
+        <code>submitStatsRequest</code> in <code>tests/page.js</code> (it types <code>String(n)</code>).</li>
+</ul>
+
+<h2 id="checks">7. Checks</h2>
+<ul>
+    <li><code>make cache-bust</code>, because the hashes of <code>styles.css</code>, <code>js/models.js</code> and
+        <code>js/interface.js</code> change. Then <code>make lint</code> and <code>make test</code>, which runs
+        typecheck first.</li>
+    <li>By hand, in a browser:
+        <ol>
+            <li>Load <code>Die(6)</code>. Stats shows <code>MIN</code>/<code>MAX</code>, and Calculate gives
+                <code>1 to 6</code>, 100%.</li>
+            <li>Add <code>3*Die(6)</code>. The row becomes <code>1 to 18</code> without submitting again.</li>
+            <li>Press + on From: it shows 1. Press + again: it shows 2. Press − twice: it shows 1, then
+                <code>MIN</code>.</li>
+            <li>Set From to <code>4</code> and Calculate, then remove <code>Die(6)</code>. From stays 4. Set From to
+                <code>1</code> and Calculate: it snaps to <code>MIN</code>.</li>
+            <li>At phone width, each "From − [box] +" group stays together when the row wraps.</li>
+            <li>Check the datalist dropdown in Chrome and Firefox (see open question 1).</li>
+        </ol>
+    </li>
+</ul>
+
+<h2 id="questions">8. Decisions and open questions</h2>
+<h3>Decided</h3>
+<ol>
+    <li><strong>Out-of-range pinned numbers snap to <code>MIN</code>/<code>MAX</code></strong>, in both the box and the
+        submitted range. The pin is lost: if the range widens again later, the end stays <code>MIN</code>. Instead
+        we could keep the pin and clamp it quietly, but then the box would show one number while the stats use
+        another.</li>
+    <li><strong>The boxes hold the word <code>MIN</code>/<code>MAX</code>.</strong> We decided against an empty number
+        box with a faded MIN/MAX hint, even though it would keep the spinner and the phone number pad, because the
+        word in the box shows exactly what it does.</li>
+    <li><strong>− / + buttons replace the spinner.</strong> A number box can't display the word <code>MIN</code>, so
+        faking one with a stand-in number and an overlay was ruled out. It would fight the browser, the stand-in
+        number would move whenever the tables change, and screen readers would read the wrong value.</li>
+    <li><strong>Stepping past the lowest or highest roll gives <code>MIN</code>/<code>MAX</code>.</strong> − on the
+        lowest roll becomes <code>MIN</code>, and + on the highest roll becomes <code>MAX</code>. Going the other way,
+        + on <code>MIN</code> pins the lowest roll and − on <code>MAX</code> pins the highest, so <code>MIN</code>
+        and the lowest roll are one step apart.
+        <code>stepRollBound</code> doesn't snap itself; the render after the step does. So no button needs disabling,
+        and there's only one snap rule.</li>
+    <li><strong>Stepping doesn't recalculate,</strong> matching the spinner today. Calculate still does.</li>
+    <li><strong>The datalist is shared.</strong> One <code>rollBounds</code> list serves every box, including boxes
+        for ranges added later.</li>
+</ol>
+<h3>Open</h3>
+<ol>
+    <li><strong>Datalist behavior differs by browser.</strong> Chrome filters suggestions by the current value, so a
+        box holding <code>MIN</code> may offer only <code>MIN</code> until it is cleared, which makes switching straight
+        from <code>MIN</code> to <code>MAX</code> take an extra step. This is acceptable as specced. If it proves
+        annoying, add a way to pick <code>MIN</code>/<code>MAX</code> directly.</li>
+    <li><strong>Snapping a half-typed value.</strong> A render can happen while the user is typing, for example when a
+        dice table fetch finishes. If the half-typed number is out of range at that moment (typing <code>1</code> on
+        the way to <code>15</code> while the lowest roll is 3), it snaps to <code>MIN</code>. This is rare, and it's
+        accepted as specced.</li>
+</ol>
+</main>
+</body>
+</html>

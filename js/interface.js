@@ -1,108 +1,12 @@
 document.addEventListener('DOMContentLoaded', onPageLoad);
 
 /**
- * @typedef {object} RequestActions
- * @property {() => void} submit
- * @property {() => void} remove
- */
-
-/**
  * @typedef {object} StatsCell
- * @property {SubmittedStatsRequest} statsRequest
  * @property {LoadedDiceTableRequest} diceTableRequest
  * @property {ReturnType<typeof getStats>} stats
  */
 
-/** @typedef {{statsRequest: SubmittedStatsRequest, cells: StatsCell[]}} StatsRow */
-
-class DiceTableRequestView {
-    /**
-     * @param {DiceTableRequest} model
-     * @param {RequestActions} actions
-     */
-    constructor(model, actions) {
-        this.element = /** @type {HTMLFormElement} */ (cloneTemplate('diceTableRequestTemplate'));
-        this.input = /** @type {HTMLInputElement} */ (this.element.elements.namedItem('buildString'));
-        this.submitButton = /** @type {HTMLButtonElement} */ (findElement(this.element, '[type=submit]'));
-        this.error = findElement(this.element, '.diceTableRequestError');
-        this.swatch = findElement(this.element, '.swatch');
-
-        this.input.addEventListener('input', () => {
-            model.buildStringInput = this.input.value;
-        });
-        this.element.addEventListener('submit', event => {
-            event.preventDefault();
-            actions.submit();
-        });
-        findElement(this.element, '.remove').addEventListener('click', actions.remove);
-    }
-
-    /** @param {DiceTableRequest} model */
-    update(model) {
-        setInputValue(this.input, model.buildStringInput);
-        this.submitButton.disabled = model.isPending;
-        this.element.setAttribute('aria-busy', String(model.isPending));
-        if (this.error.textContent !== model.error) {
-            this.error.textContent = model.error;
-        }
-        this.error.hidden = model.error === '';
-        this.swatch.classList.toggle('active', model.colorIndex !== null);
-        this.swatch.style.background = model.colorIndex === null ? '' : getTraceColor(model.colorIndex);
-    }
-}
-
-class StatsRequestView {
-    /**
-     * @param {StatsRequest} model
-     * @param {RequestActions} actions
-     */
-    constructor(model, actions) {
-        this.element = /** @type {HTMLFormElement} */ (cloneTemplate('statsRequestTemplate'));
-        this.low = /** @type {HTMLInputElement} */ (this.element.elements.namedItem('low'));
-        this.high = /** @type {HTMLInputElement} */ (this.element.elements.namedItem('high'));
-
-        this.low.addEventListener('input', () => {
-            model.lowInput = this.low.value;
-        });
-        this.high.addEventListener('input', () => {
-            model.highInput = this.high.value;
-        });
-        this.element.addEventListener('submit', event => {
-            event.preventDefault();
-            actions.submit();
-        });
-        findElement(this.element, '.remove').addEventListener('click', actions.remove);
-    }
-
-    /**
-     * @param {StatsRequest} model
-     * @param {RollRange | null} rollLimits the rolls the loaded dice tables can make, or null when none are loaded
-     */
-    update(model, rollLimits) {
-        for (const input of [this.low, this.high]) {
-            if (rollLimits === null) {
-                input.removeAttribute('min');
-                input.removeAttribute('max');
-            } else {
-                input.min = String(rollLimits.low);
-                input.max = String(rollLimits.high);
-            }
-        }
-        setInputValue(this.low, model.lowInput);
-        setInputValue(this.high, model.highInput);
-    }
-}
-
-/**
- * Writes the value only when it changed, so the cursor of the input being typed in is not reset.
- * @param {HTMLInputElement} input
- * @param {string} value
- */
-function setInputValue(input, value) {
-    if (input.value !== value) {
-        input.value = value;
-    }
-}
+/** @typedef {{statsRequest: SubmittedStatsRequest, range: RollRange, cells: StatsCell[]}} StatsRow */
 
 function onPageLoad() {
     /** @type {AppState} */
@@ -207,25 +111,33 @@ function onPageLoad() {
         render();
     }
 
-    /** @param {RollRange} rollLimits */
-    function fillBlankStatsInputs(rollLimits) {
-        state.statsRequests.forEach(statsRequest => {
-            if (statsRequest.lowInput === '') {
-                statsRequest.lowInput = String(rollLimits.low);
-            }
-            if (statsRequest.highInput === '') {
-                statsRequest.highInput = String(rollLimits.high);
-            }
-        });
+    /**
+     * Changes the box only; Calculate recalculates.
+     * @param {StatsRequest} statsRequest
+     * @param {'low' | 'high'} bound
+     * @param {number} delta
+     */
+    function stepStatsRequest(statsRequest, bound, delta) {
+        const rollLimits = getRollLimits();
+        if (bound === 'low') {
+            statsRequest.lowInput = stepRollBound(statsRequest.lowInput, delta, rollLimits);
+        } else {
+            statsRequest.highInput = stepRollBound(statsRequest.highInput, delta, rollLimits);
+        }
+        render();
+    }
+
+    /** @returns {RollRange | null} the rolls the loaded dice tables can make, or null when none are loaded */
+    function getRollLimits() {
+        const loadedDiceTableRequests = state.diceTableRequests.filter(isLoadedDiceTableRequest);
+        return loadedDiceTableRequests.length === 0 ? null : getLowestAndHighestRolls(loadedDiceTableRequests);
     }
 
     function render() {
         const loadedDiceTableRequests = state.diceTableRequests.filter(isLoadedDiceTableRequest);
-        const rollLimits = loadedDiceTableRequests.length === 0
-            ? null
-            : getLowestAndHighestRolls(loadedDiceTableRequests);
+        const rollLimits = getRollLimits();
         if (rollLimits !== null) {
-            fillBlankStatsInputs(rollLimits);
+            state.statsRequests.forEach(statsRequest => statsRequest.snapToRollLimits(rollLimits));
         }
 
         syncViews(
@@ -245,11 +157,12 @@ function onPageLoad() {
             model => new StatsRequestView(model, {
                 submit: () => submitStatsRequest(model),
                 remove: () => removeStatsRequest(model),
+                step: (bound, delta) => stepStatsRequest(model, bound, delta),
             }),
-            (view, model) => view.update(model, rollLimits),
+            (view, model) => view.update(model),
         );
 
-        const statsRows = getStatsRows(loadedDiceTableRequests);
+        const statsRows = getStatsRows(loadedDiceTableRequests, rollLimits);
         renderPlot(loadedDiceTableRequests, statsRows);
         renderStatsTable(loadedDiceTableRequests, statsRows);
         renderRoller(loadedDiceTableRequests);
@@ -257,67 +170,26 @@ function onPageLoad() {
 
     /**
      * @param {LoadedDiceTableRequest[]} loadedDiceTableRequests
+     * @param {RollRange | null} rollLimits the rolls the loaded dice tables can make, or null when none are loaded
      * @returns {StatsRow[]}
      */
-    function getStatsRows(loadedDiceTableRequests) {
+    function getStatsRows(loadedDiceTableRequests, rollLimits) {
+        if (rollLimits === null) {
+            return [];
+        }
         return state.statsRequests.filter(isSubmittedStatsRequest).map(statsRequest => {
-            const rolls = getEveryRollFrom(statsRequest.submittedRange.low, statsRequest.submittedRange.high);
+            const range = statsRequest.resolveRange(rollLimits);
+            const rolls = getEveryRollFrom(range.low, range.high);
             return {
                 statsRequest,
+                range,
                 cells: loadedDiceTableRequests.map(diceTableRequest => ({
-                    statsRequest,
                     diceTableRequest,
                     stats: getStats(diceTableRequest.diceTable.forSciNum, rolls),
                 })),
             };
         });
     }
-}
-
-/**
- * Gives each model a view, in model order, and drops the views of models that are gone.
- * Elements already in place are not moved, so a focused input keeps its focus.
- * @template {{id: string}} Model
- * @template {{element: HTMLElement}} View
- * @param {Model[]} models
- * @param {Map<string, View>} views
- * @param {HTMLElement} list
- * @param {(model: Model) => View} makeView
- * @param {(view: View, model: Model) => void} updateView
- */
-function syncViews(models, views, list, makeView, updateView) {
-    const ids = new Set(models.map(model => model.id));
-    for (const [id, view] of views) {
-        if (!ids.has(id)) {
-            view.element.remove();
-            views.delete(id);
-        }
-    }
-    models.forEach((model, index) => {
-        let view = views.get(model.id);
-        if (view === undefined) {
-            view = makeView(model);
-            views.set(model.id, view);
-        }
-        updateView(view, model);
-        const elementAtIndex = list.children[index] ?? null;
-        if (elementAtIndex !== view.element) {
-            list.insertBefore(view.element, elementAtIndex);
-        }
-    });
-}
-
-/**
- * @template View
- * @param {Map<string, View>} views
- * @param {string} id
- */
-function getView(views, id) {
-    const view = views.get(id);
-    if (view === undefined) {
-        throw new Error(`No view for ${id}.`);
-    }
-    return view;
 }
 
 /**
@@ -341,17 +213,17 @@ function renderPlot(loadedDiceTableRequests, statsRows) {
         line: {color: getTraceColor(colorIndex)},
         marker: {color: getTraceColor(colorIndex)},
     }));
-    statsRows.flatMap(({cells}) => cells).forEach(({statsRequest, diceTableRequest, stats}) => {
-        const {low, high} = statsRequest.submittedRange;
-        const {diceTable, colorIndex} = diceTableRequest;
-        traces.push({
-            ...getStatsFillTrace(low, high, diceTable.data),
-            type: 'scatter',
-            mode: 'none',
-            fill: 'tozeroy',
-            fillcolor: getStatsFillColor(colorIndex, statsRequest.shiftIndex),
-            hoverinfo: 'skip',
-            name: getStatsTraceName(diceTable.diceList, low, high, stats.pctChance),
+    statsRows.forEach(({statsRequest, range: {low, high}, cells}) => {
+        cells.forEach(({diceTableRequest: {diceTable, colorIndex}, stats}) => {
+            traces.push({
+                ...getStatsFillTrace(low, high, diceTable.data),
+                type: 'scatter',
+                mode: 'none',
+                fill: 'tozeroy',
+                fillcolor: getStatsFillColor(colorIndex, statsRequest.shiftIndex),
+                hoverinfo: 'skip',
+                name: getStatsTraceName(diceTable.diceList, low, high, stats.pctChance),
+            });
         });
     });
 
@@ -417,9 +289,9 @@ function renderStatsTable(loadedDiceTableRequests, statsRows) {
         return row;
     });
 
-    statsRows.forEach(({statsRequest, cells}) => {
+    statsRows.forEach(({range, cells}) => {
         const row = document.createElement('tr');
-        row.append(makeElement('th', getRangeLabel(statsRequest.submittedRange.low, statsRequest.submittedRange.high)));
+        row.append(makeElement('th', getRangeLabel(range.low, range.high)));
         cells.forEach(({stats}) => {
             const cell = makeElement('td', stats.pctChance + '%');
             const oneInChance = makeElement('span', '1 in ' + stats.oneInChance);
@@ -501,16 +373,6 @@ function findElement(parent, selector) {
         throw new Error(`Found no ${selector}.`);
     }
     return element;
-}
-
-/** @param {string} id */
-function cloneTemplate(id) {
-    const template = /** @type {HTMLTemplateElement} */ (getElement(id));
-    const element = template.content.firstElementChild;
-    if (element === null) {
-        throw new Error(`The #${id} template is empty.`);
-    }
-    return /** @type {HTMLElement} */ (element.cloneNode(true));
 }
 
 /**

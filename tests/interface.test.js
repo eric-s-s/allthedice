@@ -408,42 +408,264 @@ test('the stats table has a column per loaded dice table with range, mean and st
     assert.strictEqual(headers[2].style.color, asCssColor(page, page.window.getTraceColor(1)));
 });
 
-test('stats request inputs are limited to the rolls the loaded dice tables can make', async () => {
+test('stats inputs default to MIN and MAX', async () => {
     const page = await openPageWithKnownTables();
     const [statsRequest] = page.getStatsRequestRows();
-    assert.strictEqual(statsRequest.elements.low.getAttribute('min'), null);
-
-    page.document.getElementById('addDiceTableRequest').click();
-    const [first, second] = page.getDiceTableRequestRows();
-    await page.submitDiceTableRequest(first, 'Die(3)');
-    await page.submitDiceTableRequest(second, 'Die(3)+10');
-    for (const input of [statsRequest.elements.low, statsRequest.elements.high]) {
-        assert.strictEqual(input.min, '1');
-        assert.strictEqual(input.max, '13');
-    }
-
-    first.querySelector('.remove').click();
-    second.querySelector('.remove').click();
-    assert.strictEqual(statsRequest.elements.low.getAttribute('min'), null);
-    assert.strictEqual(statsRequest.elements.high.getAttribute('max'), null);
+    assert.strictEqual(statsRequest.elements.low.value, 'MIN');
+    assert.strictEqual(statsRequest.elements.high.value, 'MAX');
 });
 
-test('blank stats request inputs are filled with the lowest and highest rolls, filled ones are kept', async () => {
+test('adding a stats request focuses its low input', async () => {
     const page = await openPageWithKnownTables();
-    const [statsRequest] = page.getStatsRequestRows();
-    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[0], 'Die(3)');
-    assert.strictEqual(statsRequest.elements.low.value, '1');
-    assert.strictEqual(statsRequest.elements.high.value, '3');
-
-    page.document.getElementById('addDiceTableRequest').click();
-    await page.submitDiceTableRequest(page.getDiceTableRequestRows()[1], 'Die(3)+10');
-    assert.strictEqual(statsRequest.elements.high.value, '3');
-
     page.document.getElementById('addStatsRequest').click();
     const added = page.getStatsRequestRows()[1];
-    assert.strictEqual(added.elements.low.value, '1');
-    assert.strictEqual(added.elements.high.value, '13');
     assert.strictEqual(page.document.activeElement, added.elements.low);
+});
+
+function getStatsRowLabel(page) {
+    return getStatsTableRows(page)[4][0];
+}
+
+async function loadDiceTable(page, buildString) {
+    let row = page.getDiceTableRequestRows().at(-1);
+    if (row.elements.buildString.value !== '') {
+        page.document.getElementById('addDiceTableRequest').click();
+        row = page.getDiceTableRequestRows().at(-1);
+    }
+    await page.submitDiceTableRequest(row, buildString);
+}
+
+test('a submitted MIN follows a newly loaded dice table with a lower lowest roll', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(3)+10');
+    await page.submitStatsRequest(page.getStatsRequestRows()[0], 'MIN', 'MAX');
+    assert.strictEqual(getStatsRowLabel(page), '11 to 13');
+
+    await loadDiceTable(page, 'Die(3)');
+    assert.strictEqual(getStatsRowLabel(page), '1 to 13');
+});
+
+test('a submitted MAX follows a newly loaded dice table with a higher highest roll', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(3)');
+    await page.submitStatsRequest(page.getStatsRequestRows()[0], 'MIN', 'MAX');
+    assert.strictEqual(getStatsRowLabel(page), '1 to 3');
+
+    await loadDiceTable(page, 'Die(3)+10');
+    assert.strictEqual(getStatsRowLabel(page), '1 to 13');
+});
+
+test('a pinned low below the lowest roll after a dice table is removed snaps to MIN', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(3)');
+    await loadDiceTable(page, 'Die(3)+10');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(statsRequest, 2, 12);
+    page.getDiceTableRequestRows()[0].querySelector('.remove').click();
+    assert.strictEqual(statsRequest.elements.low.value, 'MIN');
+    assert.strictEqual(getStatsRowLabel(page), '11 to 12');
+});
+
+test('a pinned high above the highest roll after a dice table is removed snaps to MAX', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(3)');
+    await loadDiceTable(page, 'Die(3)+10');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(statsRequest, 2, 12);
+    page.getDiceTableRequestRows()[1].querySelector('.remove').click();
+    assert.strictEqual(statsRequest.elements.high.value, 'MAX');
+    assert.strictEqual(getStatsRowLabel(page), '2 to 3');
+});
+
+test('a low typed below the lowest roll snaps to MIN on submit', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(3)+10');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(statsRequest, 5, 12);
+    assert.strictEqual(statsRequest.elements.low.value, 'MIN');
+    assert.strictEqual(getStatsRowLabel(page), '11 to 12');
+});
+
+test('a high typed above the highest roll snaps to MAX on submit', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(3)');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(statsRequest, 2, 9);
+    assert.strictEqual(statsRequest.elements.high.value, 'MAX');
+    assert.strictEqual(getStatsRowLabel(page), '2 to 3');
+});
+
+test('typing that cannot become MIN, MAX or a whole number is undone', async () => {
+    const page = await openPageWithKnownTables();
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.low, '5');
+    page.typeInto(statsRequest.elements.low, '5a');
+    assert.strictEqual(statsRequest.elements.low.value, '5');
+});
+
+test('typing the start of MAX is kept', async () => {
+    const page = await openPageWithKnownTables();
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.high, 'ma');
+    assert.strictEqual(statsRequest.elements.high.value, 'ma');
+});
+
+test('undone typing puts the cursor back where it was', async () => {
+    const page = await openPageWithKnownTables();
+    const [statsRequest] = page.getStatsRequestRows();
+    const low = statsRequest.elements.low;
+    page.typeInto(low, '12');
+    low.value = '1x2';
+    low.setSelectionRange(2, 2);
+    low.dispatchEvent(new page.window.Event('input', {bubbles: true}));
+    assert.strictEqual(low.selectionStart, 1);
+});
+
+test('a typed min shows as MIN after submit', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(3)');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(statsRequest, 'min', 'MAX');
+    assert.strictEqual(statsRequest.elements.low.value, 'MIN');
+});
+
+test('the + button raises its box by 1', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.low, '3');
+    statsRequest.elements.lowUp.click();
+    assert.strictEqual(statsRequest.elements.low.value, '4');
+});
+
+test('the - button lowers its box by 1', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.high, '3');
+    statsRequest.elements.highDown.click();
+    assert.strictEqual(statsRequest.elements.high.value, '2');
+});
+
+test('- on a box holding the lowest roll changes it to MIN', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.low, '1');
+    statsRequest.elements.lowDown.click();
+    assert.strictEqual(statsRequest.elements.low.value, 'MIN');
+});
+
+test('+ on a box holding the highest roll changes it to MAX', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.high, '6');
+    statsRequest.elements.highUp.click();
+    assert.strictEqual(statsRequest.elements.high.value, 'MAX');
+});
+
+test('stepping an empty box changes it to MIN', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.high, '');
+    statsRequest.elements.highUp.click();
+    assert.strictEqual(statsRequest.elements.high.value, 'MIN');
+});
+
+test('- on a box holding MIN leaves MIN', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    statsRequest.elements.lowDown.click();
+    assert.strictEqual(statsRequest.elements.low.value, 'MIN');
+});
+
+test('+ on a box holding MAX leaves MAX', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    statsRequest.elements.highUp.click();
+    assert.strictEqual(statsRequest.elements.high.value, 'MAX');
+});
+
+test('+ on a box holding MIN pins it to the lowest roll', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    statsRequest.elements.lowUp.click();
+    assert.strictEqual(statsRequest.elements.low.value, '1');
+});
+
+test('- on a box holding MAX pins it to the highest roll', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    statsRequest.elements.highDown.click();
+    assert.strictEqual(statsRequest.elements.high.value, '6');
+});
+
+function pointerEvent(page, type, init = {}) {
+    return new page.window.MouseEvent(type, {bubbles: true, button: 0, ...init});
+}
+
+async function openPageToHoldLowUp() {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(101)');
+    const [statsRequest] = page.getStatsRequestRows();
+    page.typeInto(statsRequest.elements.low, '50');
+    return {
+        page,
+        low: statsRequest.elements.low,
+        lowUp: statsRequest.elements.lowUp,
+        holdDelayMs: page.window.eval('holdDelayMs'),
+        holdRepeatMs: page.window.eval('holdRepeatMs'),
+    };
+}
+
+test('pressing and releasing a step button steps once', async () => {
+    const {page, low, lowUp} = await openPageToHoldLowUp();
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerdown'));
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerup'));
+    lowUp.dispatchEvent(pointerEvent(page, 'click', {detail: 1}));
+    assert.strictEqual(low.value, '51');
+});
+
+test('holding a step button repeats it after a delay', async () => {
+    const {page, low, lowUp, holdDelayMs, holdRepeatMs} = await openPageToHoldLowUp();
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerdown'));
+    page.clock.tick(holdDelayMs - 1);
+    assert.strictEqual(low.value, '51');
+    page.clock.tick(1 + 2 * holdRepeatMs);
+    assert.strictEqual(low.value, '54');
+});
+
+test('releasing a held step button stops it', async () => {
+    const {page, low, lowUp, holdDelayMs} = await openPageToHoldLowUp();
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerdown'));
+    page.clock.tick(holdDelayMs);
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerup'));
+    page.clock.tick(10 * holdDelayMs);
+    assert.strictEqual(low.value, '52');
+});
+
+test('a held step button stops when the pointer leaves it', async () => {
+    const {page, low, lowUp, holdDelayMs} = await openPageToHoldLowUp();
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerdown'));
+    page.clock.tick(holdDelayMs);
+    lowUp.dispatchEvent(pointerEvent(page, 'pointerleave'));
+    page.clock.tick(10 * holdDelayMs);
+    assert.strictEqual(low.value, '52');
+});
+
+test('stepping does not recalculate the stats row', async () => {
+    const page = await openPageWithKnownTables();
+    await loadDiceTable(page, 'Die(6)');
+    const [statsRequest] = page.getStatsRequestRows();
+    await page.submitStatsRequest(statsRequest, 2, 4);
+    statsRequest.elements.lowUp.click();
+    assert.strictEqual(getStatsRowLabel(page), '2 to 4');
 });
 
 test('a submitted stats request adds a stats row and a shaded trace for each loaded dice table', async () => {
