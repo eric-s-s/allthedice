@@ -21,6 +21,8 @@
  * @typedef {object} AppState
  * @property {DiceTableRequest[]} diceTableRequests
  * @property {StatsRequest[]} statsRequests
+ * @property {DiceBuilderSession | null} diceBuilderSession the open dice builder and the row it writes to, or null
+ *     when the builder is closed
  */
 
 /**

@@ -9,7 +9,7 @@
     <meta name="author" content="Eric Shaw">
     <meta property="og:image" content="images/tons_o_dice.jpg">
     <link rel="icon" href="images/d6_3.ico">
-    <link rel="stylesheet" href="styles.css?v=8127df5f">
+    <link rel="stylesheet" href="styles.css?v=7a12a7f6">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/4.2.0/plotly.min.js"
             integrity="sha384-F4AdcRk3NYRZZUZ7qARRp/wPkwvdta756IMuHDAZcmtM5nuHKykTbDJd7N9h+Qff"
@@ -20,10 +20,13 @@
     <script src="js/plothelpers.js?v=1417c81e" defer></script>
     <script src="js/colors.js?v=79646e83" defer></script>
     <script src="js/config.js?v=4ebdfb43" defer></script>
-    <script src="js/models.js?v=a8781407" defer></script>
+    <script src="js/models.js?v=2c3c7aa5" defer></script>
+    <script src="js/dice-builder.js?v=c712ea93" defer></script>
+    <script src="js/build-string-parser.js?v=893d4b91" defer></script>
     <script src="js/fetch-dice-tables.js?v=c555cd71" defer></script>
-    <script src="js/request-views.js?v=1cc1ece6" defer></script>
-    <script src="js/interface.js?v=7d42e22f" defer></script>
+    <script src="js/request-views.js?v=3fde4dd9" defer></script>
+    <script src="js/dice-builder-view.js?v=9a7a8168" defer></script>
+    <script src="js/interface.js?v=04afc3b7" defer></script>
 </head>
 <body>
 <main>
@@ -197,16 +200,116 @@
     </section>
 </main>
 
+<dialog id="diceBuilder" aria-labelledby="diceBuilderTitle">
+    <div class="builderHeader">
+        <h2 id="diceBuilderTitle">Build a dice collection</h2>
+        <button type="button" class="iconButton" name="close" aria-label="Close" title="Close">&times;</button>
+    </div>
+    <div class="builderBody">
+        <p class="builderUnreadableNote" hidden>Done will replace <code></code></p>
+
+        <h3>Add a die</h3>
+        <div class="builderPresets">
+                <button type="button" class="secondary" data-sides="4" autofocus>D4</button>
+                <button type="button" class="secondary" data-sides="6">D6</button>
+                <button type="button" class="secondary" data-sides="8">D8</button>
+                <button type="button" class="secondary" data-sides="10">D10</button>
+                <button type="button" class="secondary" data-sides="12">D12</button>
+                <button type="button" class="secondary" data-sides="20">D20</button>
+                <button type="button" class="secondary" data-sides="100">D100</button>
+        </div>
+
+        <h3>Custom die</h3>
+        <div class="builderCustom">
+            <label>Kind
+                <select name="customKind">
+                    <option value="Die">Die</option>
+                    <option value="ModDie">ModDie</option>
+                    <option value="WeightedDie">WeightedDie</option>
+                    <option value="ModWeightedDie">ModWeightedDie</option>
+                </select>
+            </label>
+            <label>Sides
+                <input type="text" name="customSides" inputmode="numeric" autocomplete="off" spellcheck="false">
+            </label>
+            <span class="builderCustomModifier">Modifier
+                <button type="button" class="iconButton stepButton" name="customModifierDown"
+                        aria-label="Step custom die modifier down">&minus;</button>
+                <input type="text" name="customModifier" aria-label="Custom die modifier" autocomplete="off"
+                       spellcheck="false">
+                <button type="button" class="iconButton stepButton" name="customModifierUp"
+                        aria-label="Step custom die modifier up">+</button>
+            </span>
+        </div>
+        <div class="builderWeights" role="group" aria-label="Weight of each face"></div>
+        <button type="button" class="secondary builderAddCustom" name="addCustom">Add custom die</button>
+
+        <h3>Your dice</h3>
+        <p class="emptyNote builderPartsEmpty">Add a die above.</p>
+        <div class="builderParts"></div>
+
+        <h3 id="builderModifierTitle">Modifier</h3>
+        <span class="builderStepper">
+            <button type="button" class="iconButton stepButton" name="modifierDown"
+                    aria-label="Step modifier down">&minus;</button>
+            <input type="text" name="modifier" aria-labelledby="builderModifierTitle" autocomplete="off"
+                   spellcheck="false">
+            <button type="button" class="iconButton stepButton" name="modifierUp"
+                    aria-label="Step modifier up">+</button>
+        </span>
+
+        <h3 id="builderPreviewTitle">Preview</h3>
+        <output class="builderPreview" aria-labelledby="builderPreviewTitle"></output>
+    </div>
+    <div class="builderFooter">
+        <button type="button" class="secondary" name="cancel">Cancel</button>
+        <button type="button" class="primary" name="done">Done</button>
+    </div>
+</dialog>
+
 <template id="diceTableRequestTemplate">
     <form class="diceTableRequest">
         <span class="swatch" aria-hidden="true"></span>
         <input type="text" name="buildString" aria-label="Dice collection" autocomplete="off" spellcheck="false"
                placeholder="e.g. 2*Die(6)&amp;3*WeightedDie({1:1, 2:3})">
+        <button type="button" class="secondary build" title="Build this dice collection by clicking">Build</button>
         <button type="submit" class="primary">Calculate</button>
         <button type="button" class="iconButton remove" aria-label="Remove dice collection"
                 title="Remove dice collection">&times;</button>
         <p class="diceTableRequestError" role="alert" hidden></p>
     </form>
+</template>
+
+<template id="builderPartTemplate">
+    <div class="builderPart">
+        <span class="builderStepper">
+            <button type="button" class="iconButton stepButton" name="countDown">&minus;</button>
+            <input type="text" name="count" class="builderCount" inputmode="numeric" autocomplete="off"
+                   spellcheck="false">
+            <button type="button" class="iconButton stepButton" name="countUp">+</button>
+        </span>
+        <span class="builderTimes" aria-hidden="true">&times;</span>
+        <code class="builderDieLabel"></code>
+        <div class="builderWrapperControls">
+            <select name="wrapper">
+                <option value="none">No wrapper</option>
+                <option value="best">Best of pool</option>
+                <option value="worst">Worst of pool</option>
+                <option value="exploding">Exploding</option>
+                <option value="strong">Strong</option>
+            </select>
+            <label class="builderPool">Pool
+                <input type="text" name="poolSize" inputmode="numeric" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="builderPool">Keep
+                <input type="text" name="keep" inputmode="numeric" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="builderStrong">Multiplier
+                <input type="text" name="multiplier" inputmode="numeric" autocomplete="off" spellcheck="false">
+            </label>
+        </div>
+        <button type="button" class="iconButton remove">&times;</button>
+    </div>
 </template>
 
 <template id="statsRequestTemplate">

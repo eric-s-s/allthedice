@@ -4,17 +4,19 @@
  * @property {() => void} remove
  */
 
+/** @typedef {RequestActions & {build: () => void}} DiceTableRequestActions */
 /** @typedef {RequestActions & {step: (bound: 'low' | 'high', delta: number) => void}} StatsRequestActions */
 
 class DiceTableRequestView {
     /**
      * @param {DiceTableRequest} model
-     * @param {RequestActions} actions
+     * @param {DiceTableRequestActions} actions
      */
     constructor(model, actions) {
         this.element = /** @type {HTMLFormElement} */ (cloneTemplate('diceTableRequestTemplate'));
         this.input = /** @type {HTMLInputElement} */ (this.element.elements.namedItem('buildString'));
         this.submitButton = /** @type {HTMLButtonElement} */ (findElement(this.element, '[type=submit]'));
+        this.buildButton = /** @type {HTMLButtonElement} */ (findElement(this.element, '.build'));
         this.error = findElement(this.element, '.diceTableRequestError');
         this.swatch = findElement(this.element, '.swatch');
 
@@ -25,6 +27,7 @@ class DiceTableRequestView {
             event.preventDefault();
             actions.submit();
         });
+        this.buildButton.addEventListener('click', actions.build);
         findElement(this.element, '.remove').addEventListener('click', actions.remove);
     }
 
@@ -32,6 +35,7 @@ class DiceTableRequestView {
     update(model) {
         setInputValue(this.input, model.buildStringInput);
         this.submitButton.disabled = model.isPending;
+        this.buildButton.disabled = model.isPending;
         this.element.setAttribute('aria-busy', String(model.isPending));
         if (this.error.textContent !== model.error) {
             this.error.textContent = model.error;

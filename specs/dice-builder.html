@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dice Builder Spec</title>
+<style>
+    :root {
+        --bg: #ffffff;
+        --text: #1f2328;
+        --muted: #59636e;
+        --border: #d1d9e0;
+        --code-bg: #f3f4f6;
+        --accent: #0969da;
+        --note-bg: #eef5ff;
+        color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg: #0d1117;
+            --text: #e6edf3;
+            --muted: #9198a1;
+            --border: #3d444d;
+            --code-bg: #161b22;
+            --accent: #4493f8;
+            --note-bg: #12233a;
+        }
+    }
+    body {
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 2rem 16px 4rem;
+    }
+    main { max-width: 52rem; margin: 0 auto; }
+    h1 { margin-bottom: 0.25rem; }
+    h2 { margin-top: 2.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 1.75rem; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .note { background: var(--note-bg); border-left: 4px solid var(--accent); padding: 0.75rem 1rem; border-radius: 4px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+    pre { background: var(--code-bg); padding: 0.9rem 1rem; border-radius: 6px; overflow-x: auto; }
+    pre code { background: none; padding: 0; }
+    .tableWrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+    th { background: var(--code-bg); }
+    a { color: var(--accent); }
+    nav ol { padding-left: 1.25rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Dice Builder Spec</h1>
+<p class="subtitle">A <b>Build</b> button on each dice collection row opens a modal where the user puts together a
+dice collection by clicking instead of typing its build string.</p>
+
+<p class="note"><strong>One rule for the text box:</strong> the builder writes only build strings that it can read back.
+Opening the builder on a row parses the row's text. If the parse works, the modal starts with those dice. If it fails,
+the modal starts empty and says that Done will replace the text.</p>
+
+<nav>
+<ol>
+    <li><a href="#goals">Goals</a></li>
+    <li><a href="#format">Build string format</a></li>
+    <li><a href="#models">Data models</a></li>
+    <li><a href="#views">Views</a></li>
+    <li><a href="#wiring">Connecting views to models</a></li>
+    <li><a href="#behavior">Behavior changes</a></li>
+    <li><a href="#tests">Tests</a></li>
+    <li><a href="#checks">Checks</a></li>
+    <li><a href="#questions">Decisions and open questions</a></li>
+</ol>
+</nav>
+
+<h2 id="goals">1. Goals</h2>
+<ol>
+    <li>Each dice collection row has a <b>Build</b> button that opens a modal dice builder for that row.</li>
+    <li>Common dice take one click each. Preset buttons <code>D4 D6 D8 D10 D12 D20 D100</code> add a die. Clicking the
+        same preset again adds 1 to its count, so clicking D6 three times gives <code>3*Die(6)</code>.</li>
+    <li>A custom die can be a <code>Die</code>, <code>ModDie</code>, <code>WeightedDie</code> or
+        <code>ModWeightedDie</code>. The user picks the kind, sets the sides, a modifier and the weights where the kind
+        uses them, and adds it.</li>
+    <li>Each part of the collection has a count (the <code>*</code>) and at most one wrapper: Best of pool, Worst of
+        pool, Exploding or Strong. Parts are joined with <code>&amp;</code>.</li>
+    <li>A single collection modifier (<code>Modifier(n)</code>) is set with − / + buttons.</li>
+    <li>A live preview shows the build string, so the user also learns how to type it.</li>
+    <li><b>Done</b> writes the build string into the row and calculates it. <b>Cancel</b>, the close button and
+        Escape leave the row unchanged.</li>
+    <li>Reopening the builder on a row it filled shows the same dice again, ready to edit.</li>
+</ol>
+<p><strong>Out of scope:</strong> the Lambda API (the server still validates every build string, and its errors show on
+the row as they do today), the Examples menu, stats, plot, roller, stacked wrappers, <code>ExplodingOn</code>, setting
+the number of explosions, and the upper/lower mid pools.</p>
+
+<h2 id="format">2. Build string format</h2>
+<p>The builder writes exactly this grammar. The parser accepts the same grammar, with any whitespace between tokens and
+an optional <code>1*</code>.</p>
+<pre><code>collection := part ('&amp;' part)* ['&amp;' 'Modifier(' int ')']   (or just the Modifier)
+part       := [count '*'] wrapped
+wrapped    := die
+            | 'BestOfDicePool(DicePool(' die ', ' poolSize '), ' keep ')'
+            | 'WorstOfDicePool(DicePool(' die ', ' poolSize '), ' keep ')'
+            | 'Exploding(' die ')'
+            | 'StrongDie(' die ', ' multiplier ')'
+die        := 'Die(' sides ')'
+            | 'ModDie(' sides ', ' int ')'
+            | 'WeightedDie(' weights ')'
+            | 'ModWeightedDie(' weights ', ' int ')'
+weights    := '{' face ': ' weight (', ' face ': ' weight)* '}'</code></pre>
+<ul>
+    <li>A count of 1 is left out: <code>Die(6)</code>, not <code>1*Die(6)</code>.</li>
+    <li>A collection modifier of 0 is left out. When it isn't 0, <code>Modifier(n)</code> comes last.</li>
+    <li>Weights are written in face order, and faces with weight 0 are left out:
+        <code>WeightedDie({1: 1, 3: 2})</code>.</li>
+    <li>Spacing matches the Examples menu: <code>ModDie(6, 2)</code>, <code>{1: 1, 2: 2}</code>.</li>
+</ul>
+<p>Example: <code>2*Die(6)&amp;BestOfDicePool(DicePool(ModDie(8, 1), 4), 3)&amp;Modifier(-2)</code></p>
+
+<h3>Limits</h3>
+<div class="tableWrap"><table>
+    <tr><th>value</th><th>allowed</th></tr>
+    <tr><td>count</td><td>whole number ≥ 1</td></tr>
+    <tr><td>sides (<code>Die</code>, <code>ModDie</code>)</td><td>whole number ≥ 1</td></tr>
+    <tr><td>sides (<code>WeightedDie</code>, <code>ModWeightedDie</code>)</td><td>whole number from 1 to 100. It's
+        the number of weight boxes</td></tr>
+    <tr><td>weight</td><td>whole number ≥ 0, with at least one weight above 0</td></tr>
+    <tr><td>die modifier, collection modifier</td><td>any whole number</td></tr>
+    <tr><td>pool size</td><td>whole number ≥ 1</td></tr>
+    <tr><td>keep</td><td>whole number from 1 to the pool size</td></tr>
+    <tr><td>Strong multiplier</td><td>whole number ≥ 1</td></tr>
+</table></div>
+<p>The builder checks these limits only. Anything else the server rejects (a pool too big to calculate, for example)
+shows up as the row's error after Done.</p>
+
+<h2 id="models">3. Data models (new <code>js/dice-builder.js</code> and <code>js/build-string-parser.js</code>)</h2>
+<p>Every box keeps its raw text, the same way <code>StatsRequest.lowInput</code> does, so half-typed text like
+<code>-</code> survives a render. Text is turned into numbers only when the build string is made.</p>
+
+<h3><code>BuilderDie</code></h3>
+<p>A die that has been added. It's fixed after it is added; to change one, remove it and add a new one.</p>
+<pre><code>/**
+ * @typedef {{kind: 'Die', sides: number}
+ *     | {kind: 'ModDie', sides: number, modifier: number}
+ *     | {kind: 'WeightedDie', weights: number[]}
+ *     | {kind: 'ModWeightedDie', weights: number[], modifier: number}} BuilderDie
+ * weights[i] is the weight of face i + 1
+ */</code></pre>
+
+<h3><code>BuilderPart</code></h3>
+<div class="tableWrap"><table>
+    <tr><th>field</th><th>type</th><th>notes</th></tr>
+    <tr><td><code>id</code></td><td><code>string</code></td><td><code>crypto.randomUUID()</code>, so
+        <code>syncViews</code> can key the part rows</td></tr>
+    <tr><td><code>die</code></td><td><code>BuilderDie</code></td><td></td></tr>
+    <tr><td><code>countInput</code></td><td><code>string</code></td><td>starts as <code>'1'</code></td></tr>
+    <tr><td><code>wrapper</code></td><td><code>'none' | 'best' | 'worst' | 'exploding' | 'strong'</code></td>
+        <td>starts as <code>'none'</code></td></tr>
+    <tr><td><code>poolSizeInput</code>, <code>keepInput</code></td><td><code>string</code></td>
+        <td>start as <code>'2'</code> and <code>'1'</code>, the most common pool (advantage/disadvantage). Used by
+            <code>best</code> and <code>worst</code></td></tr>
+    <tr><td><code>multiplierInput</code></td><td><code>string</code></td><td>starts as <code>'2'</code>. Used by
+        <code>strong</code></td></tr>
+</table></div>
+<p>The wrapper boxes keep their text when the wrapper changes, so switching from Best to Worst keeps the pool size and
+keep values.</p>
+
+<h3><code>CustomDieDraft</code></h3>
+<p>The custom die form, before Add.</p>
+<div class="tableWrap"><table>
+    <tr><th>field</th><th>type</th><th>notes</th></tr>
+    <tr><td><code>kind</code></td><td><code>'Die' | 'ModDie' | 'WeightedDie' | 'ModWeightedDie'</code></td>
+        <td>starts as <code>'Die'</code></td></tr>
+    <tr><td><code>sidesInput</code></td><td><code>string</code></td><td>starts as <code>'6'</code></td></tr>
+    <tr><td><code>modifierInput</code></td><td><code>string</code></td><td>starts as <code>'0'</code></td></tr>
+    <tr><td><code>weightInputs</code></td><td><code>string[]</code></td><td>one per side, starting as
+        <code>'1'</code></td></tr>
+</table></div>
+<p>Methods:</p>
+<ul>
+    <li><code>setSides(text)</code> sets <code>sidesInput</code>. When the text is a whole number from 1 to 100, it
+        resizes <code>weightInputs</code> to that length: it keeps the weights that are still in range, and new sides
+        start at <code>'1'</code>. Other text leaves <code>weightInputs</code> alone.</li>
+    <li><code>stepModifier(delta)</code>: any whole number. Invalid text steps as 0.</li>
+    <li><code>toDie()</code> returns a <code>BuilderDie</code> for the current kind, or <code>null</code> when a box
+        the kind uses breaks a limit.</li>
+</ul>
+
+<h3><code>DiceBuilder</code></h3>
+<div class="tableWrap"><table>
+    <tr><th>field</th><th>type</th><th>notes</th></tr>
+    <tr><td><code>parts</code></td><td><code>BuilderPart[]</code></td><td>in the order they were added</td></tr>
+    <tr><td><code>modifierInput</code></td><td><code>string</code></td><td>starts as <code>'0'</code></td></tr>
+    <tr><td><code>draft</code></td><td><code>CustomDieDraft</code></td><td>a new draft per builder</td></tr>
+</table></div>
+<p>Methods:</p>
+<ul>
+    <li><code>addPreset(sides)</code>: if a part is <code>Die(sides)</code> with no wrapper, its count goes up by 1.
+        Otherwise it adds a new part with count 1. A count box holding invalid text counts as 0, so it becomes
+        <code>'1'</code>.</li>
+    <li><code>addCustomDie()</code> adds a part from <code>draft.toDie()</code>. It does nothing when that is
+        <code>null</code>. The draft keeps its values, so the same die can be added again.</li>
+    <li><code>removePart(id)</code>.</li>
+    <li><code>stepCount(id, delta)</code>: a count below 1 stays 1. Parts are removed only with their × button.
+        Invalid text steps as 0, then clamps.</li>
+    <li><code>stepModifier(delta)</code>: any whole number. Invalid text steps as 0.</li>
+    <li><code>toBuildString()</code> returns <code>string | null</code>: the build string, <code>''</code> when there
+        are no parts and the modifier is 0, or <code>null</code> when any box breaks a limit.</li>
+</ul>
+
+<h3>Functions</h3>
+<div class="tableWrap"><table>
+    <tr><th>function</th><th>returns</th><th>notes</th></tr>
+    <tr><td><code>parseWholeNumber(text)</code></td><td><code>number | null</code></td>
+        <td>Trims the text. <code>/^-?[0-9]+$/</code> gives the number, and anything else gives
+            <code>null</code>.</td></tr>
+    <tr><td><code>dieToBuildString(die)</code></td><td><code>string</code></td><td>for a <code>BuilderDie</code>.
+        Also used as the die's label in the part row</td></tr>
+    <tr><td><code>partToBuildString(part)</code></td><td><code>string | null</code></td>
+        <td><code>null</code> when the count or a box the wrapper uses breaks a limit</td></tr>
+</table></div>
+
+<h3>Parser (new <code>js/build-string-parser.js</code>)</h3>
+<p>Reads build strings back into a <code>DiceBuilder</code>. It depends on the model, and the model doesn't depend on
+it: <code>toBuildString</code> and the <code>…ToBuildString</code> functions stay with the model.</p>
+<div class="tableWrap"><table>
+    <tr><th>function</th><th>returns</th><th>notes</th></tr>
+    <tr><td><code>parseBuildString(text)</code></td><td><code>DiceBuilder | null</code></td>
+        <td>A hand-written tokenizer and recursive-descent parser for the grammar in section 2. Blank text gives an
+            empty builder. Text outside the grammar (stacked wrappers, two <code>Modifier</code>s, a count on
+            <code>Modifier</code>, a face below 1, or anything unknown) gives <code>null</code>, and so does a value
+            outside the limits. Weights become the die's <code>weights</code> from face 1 to the highest face, and
+            missing faces become 0. The draft starts fresh.</td></tr>
+</table></div>
+
+<h3><code>AppState</code> (<code>models.js</code>)</h3>
+<pre><code>/**
+ * @typedef {object} DiceBuilderSession
+ * @property {DiceTableRequest} diceTableRequest the row that Done writes to
+ * @property {DiceBuilder} builder
+ * @property {string} unreadableText the row's text when the builder could not read it, so Done will discard it;
+ *     '' otherwise
+ */</code></pre>
+<p><code>AppState</code> gets <code>diceBuilderSession: DiceBuilderSession | null</code>, which starts as
+<code>null</code>. While it isn't <code>null</code>, the modal is open.</p>
+
+<h2 id="views">4. Views</h2>
+
+<h3>Markup (<code>index.html</code>)</h3>
+<ul>
+    <li><code>diceTableRequestTemplate</code> gets
+        <code>&lt;button type="button" class="secondary build"&gt;Build&lt;/button&gt;</code> between the text box and
+        Calculate.</li>
+    <li>One <code>&lt;dialog id="diceBuilder" aria-labelledby="diceBuilderTitle"&gt;</code> after
+        <code>&lt;/main&gt;</code>. It holds, in order:
+        <ol>
+            <li>A header with <code>&lt;h2 id="diceBuilderTitle"&gt;Build a dice collection&lt;/h2&gt;</code> and an
+                <code>.iconButton</code> close button (×).</li>
+            <li>An unreadable note, <code>&lt;p class="builderUnreadableNote" hidden&gt;</code>: "Done will replace
+                <code>…</code>", filled with <code>unreadableText</code>.</li>
+            <li><b>Add a die:</b> the seven preset buttons, each with <code>data-sides</code>.</li>
+            <li><b>Custom die:</b> a kind <code>&lt;select&gt;</code>, a Sides box, a Modifier group of − / box / +
+                (shown for <code>ModDie</code> and <code>ModWeightedDie</code>; a <code>&lt;span&gt;</code>, not a
+                <code>&lt;label&gt;</code>, so it doesn't label the − button), a weights area (shown for the weighted kinds) with
+                one box per side labelled by its face, and then an <b>Add custom die</b> button. The button is disabled
+                while <code>draft.toDie()</code> is <code>null</code>.</li>
+            <li><b>Your dice:</b> <code>&lt;div class="builderParts"&gt;</code>, plus an empty note when there are no
+                parts.</li>
+            <li><b>Modifier:</b> − / box / + for the collection modifier.</li>
+            <li><b>Preview:</b> <code>&lt;output class="builderPreview"&gt;</code> showing the build string, or "Fix
+                the highlighted boxes" when <code>toBuildString()</code> is <code>null</code>.</li>
+            <li><b>Cancel</b> (<code>.secondary</code>) and <b>Done</b> (<code>.primary</code>).</li>
+        </ol>
+    </li>
+    <li><code>&lt;template id="builderPartTemplate"&gt;</code> holds one part row: − / count box / +, "×", the die
+        label in <code>&lt;code&gt;</code>, a <code>.builderWrapperControls</code> group, and a remove × button. The
+        group holds a wrapper <code>&lt;select&gt;</code> (No wrapper, Best of pool, Worst of pool, Exploding,
+        Strong), Pool and Keep boxes (shown for the pools), and a Multiplier box (shown for Strong).</li>
+    <li>Every number box is <code>type="text"</code>, for the same reason as the stats boxes: a number box reports
+        <code>''</code> for half-typed text like <code>-</code>, so the model couldn't keep the raw text. Boxes that
+        can't be negative get <code>inputmode="numeric"</code>, which gives phones the number pad. The die modifier box
+        doesn't, because the iPhone number pad has no minus sign. Both modifiers have − / + buttons instead, so
+        most changes don't need the keyboard.</li>
+    <li>Every box and select is labelled. The fixed ones in the dialog use a wrapping <code>&lt;label&gt;</code> or
+        <code>aria-labelledby</code>. The ones made per part or per face get an <code>aria-label</code> naming the
+        die or face (for example "Count of Die(6)", "Weight of face 3").</li>
+</ul>
+
+<h3>Styles (<code>styles.css</code>)</h3>
+<ul>
+    <li><code>.diceTableRequest</code> gets a fifth grid column. On phones the text box keeps its own line, and Build,
+        Calculate and × share the second line.</li>
+    <li><code>#diceBuilder</code> uses <code>--surface</code>, <code>--radius</code> and <code>--menu-shadow</code>.
+        Its width is <code>min(40rem, 100vw - 32px)</code>, and its body scrolls. <code>::backdrop</code> dims the
+        page.</li>
+    <li>The dialog is pinned <code>max(16px, 6vh)</code> from the top instead of centered, and its height is at most
+        what's left minus 16px. A centered dialog moves every time it grows or shrinks (adding or removing a part,
+        showing the weights), which slid the presets and Add under the pointer and added unwanted dice.</li>
+    <li>Presets wrap as a row of <code>.secondary</code> buttons. Each part row is a grid: count, die and remove
+        on the first line, and the wrapper group on the second, where it wraps on phones. A long die label wraps
+        inside its own column.</li>
+    <li><code>[aria-invalid="true"]</code> boxes get a <code>--danger</code> outline.</li>
+    <li>Step buttons reuse <code>.iconButton.stepButton</code>, which is already 44px on phones.</li>
+</ul>
+
+<h3><code>DiceTableRequestView</code> (<code>request-views.js</code>)</h3>
+<ul>
+    <li><code>RequestActions</code> gets a third action, <code>build</code>, so the dice table actions become
+        <code>DiceTableRequestActions</code>. The stats actions don't change.</li>
+    <li>The Build button calls <code>actions.build()</code>. <code>update(model)</code> disables it while
+        <code>isPending</code>, the same as Calculate.</li>
+</ul>
+
+<h3><code>DiceBuilderView</code> (new <code>js/dice-builder-view.js</code>)</h3>
+<p>One instance, made in <code>onPageLoad</code> around the static dialog.</p>
+<pre><code>/**
+ * @typedef {object} DiceBuilderActions
+ * @property {() => void} done
+ * @property {() => void} cancel
+ */</code></pre>
+<p>The constructor takes <code>getSession</code> (<code>() =&gt; state.diceBuilderSession</code>) and these actions.
+<code>interface.js</code> only hears about Done and Cancel. Edits inside the modal stay inside the view.</p>
+<ul>
+    <li><code>getOpenSession()</code> returns the open session, looked up through <code>getSession</code> on every
+        call because each open makes a new one. It throws when the modal is closed, since the controls can't be
+        reached then.</li>
+    <li>Every listener does two steps in order: it edits the session's builder, then calls
+        <code>update(session)</code>. Only the modal shows the builder, so the plot, stats and roller aren't redrawn,
+        and Plotly doesn't re-plot on every keystroke.</li>
+    <li>The constructor attaches the listeners for the fixed controls: the presets, the custom die form, Add custom
+        die, and both modifiers' boxes and steppers (through <code>onPressAndHold</code>).</li>
+    <li>Every listener in the modal lives in <code>DiceBuilderView</code>. Part rows are kept in a
+        <code>Map</code> and synced with <code>syncViews</code> by part id. A <code>BuilderPartView</code> only
+        draws: its constructor clones the template and sets the labels, and <code>update(part)</code> writes the
+        boxes. <code>makePartView(part)</code> makes the row and attaches its listeners the same way as the
+        constructor's: the boxes and wrapper select write to the part, and the step and remove buttons call
+        <code>stepCount</code> / <code>removePart</code>. Nothing is passed down into a row, so a row never calls
+        back into the modal.</li>
+    <li>The weight boxes are synced by index. The view adds or removes boxes until the count matches
+        <code>weightInputs.length</code>, so a focused box keeps its focus.</li>
+    <li>The dialog's <code>cancel</code> event (Escape) calls <code>preventDefault()</code> and then
+        <code>actions.cancel()</code>. The close button and Cancel call <code>actions.cancel()</code>, and Done calls
+        <code>actions.done()</code>. The dialog is only ever closed by <code>update</code>. Some browsers ignore
+        <code>preventDefault()</code> on a repeated Escape and close the dialog anyway, so a <code>close</code> event
+        while a session is still open also calls <code>actions.cancel()</code>.</li>
+    <li><code>update(session)</code>:
+        <ul>
+            <li>With <code>null</code>: if the dialog is open, it calls <code>close()</code>.</li>
+            <li>Otherwise: if the dialog is closed, it calls <code>showModal()</code>. The first preset (D4) has
+                <code>autofocus</code>. Then it writes every box with <code>setInputValue</code>, shows and hides the
+                kind and wrapper fields, sets <code>aria-invalid</code> on each box that breaks a limit, fills the
+                preview and unreadable note, and disables Done when <code>toBuildString()</code> is <code>null</code> or
+                <code>''</code>.</li>
+        </ul>
+    </li>
+    <li>When the dialog closes, the browser puts focus back on the Build button that opened it.</li>
+</ul>
+
+<h2 id="wiring">5. Connecting views to models (<code>interface.js</code>)</h2>
+<ul>
+    <li><strong>Open:</strong> <code>build</code> for a row runs
+        <code>parseBuildString(request.buildStringInput)</code>. If it gets a builder, the session uses it with
+        <code>unreadableText: ''</code>. If it gets <code>null</code>, the session uses <code>new DiceBuilder()</code>
+        with <code>unreadableText</code> set to the trimmed text. Then it calls <code>render()</code>.</li>
+    <li><strong>Done:</strong> sets <code>request.buildStringInput</code> to <code>toBuildString()</code>, sets
+        <code>state.diceBuilderSession</code> to <code>null</code>, calls <code>render()</code> to close the dialog, and
+        then calls <code>getDiceTable(request)</code>. Rendering first matters because <code>getDiceTable</code> returns
+        without rendering when the request is already pending. Done does nothing when the build string is
+        <code>null</code> or <code>''</code> (the button is disabled anyway).</li>
+    <li><strong>Cancel:</strong> sets <code>state.diceBuilderSession</code> to <code>null</code> and calls
+        <code>render()</code>.</li>
+    <li><code>render()</code> calls <code>diceBuilderView.update(state.diceBuilderSession)</code> after the request
+        views.</li>
+    <li>The rest of the page is inert while the modal is open, so the row can't be removed or resubmitted under an
+        open session.</li>
+</ul>
+
+<h3>Script order</h3>
+<p><code>js/dice-builder.js</code> loads after <code>models.js</code>, <code>js/build-string-parser.js</code> right
+after it, and <code>js/dice-builder-view.js</code> after <code>request-views.js</code>. All three go in <code>index.html</code> (with <code>?v=</code>) and in
+<code>pageScripts</code> in <code>tests/page.js</code>. <code>jsconfig.json</code> already includes
+<code>js/*.js</code>, so typecheck picks them up.</p>
+
+<h2 id="behavior">6. Behavior changes</h2>
+<div class="tableWrap"><table>
+    <tr><th>today</th><th>after</th></tr>
+    <tr><td>A dice collection row has a text box, Calculate and ×</td>
+        <td>It also has Build, which is disabled while the row is calculating</td></tr>
+    <tr><td>Build strings are typed by hand or picked from Examples</td>
+        <td>They can also be built in the modal, which fills the row and calculates it</td></tr>
+</table></div>
+<p>Everything else stays the same: typing in the box, Calculate, Examples, colors, errors, stats, plot and roller.</p>
+
+<h2 id="tests">7. Tests</h2>
+<p>One behavior per test.</p>
+
+<h3><code>tests/page.js</code></h3>
+<ul>
+    <li>jsdom has <code>HTMLDialogElement</code> but no <code>showModal</code> or <code>close</code> (checked against
+        jsdom 26.1.0). <code>openPage</code> stubs both on <code>window.HTMLDialogElement.prototype</code>:
+        <code>showModal</code> sets <code>open</code>, and <code>close</code> clears it and dispatches
+        <code>close</code>.</li>
+    <li>Add <code>js/dice-builder.js</code>, <code>js/build-string-parser.js</code> and
+        <code>js/dice-builder-view.js</code> to <code>pageScripts</code>.</li>
+    <li>Add helpers <code>openBuilder(row)</code> and <code>getBuilder()</code>, which returns the dialog.</li>
+</ul>
+
+<h3>New <code>tests/dice-builder.test.js</code></h3>
+<p>Loads <code>dice-builder.js</code> with <code>loadScripts</code>.</p>
+<ul>
+    <li><code>dieToBuildString</code>:
+        <ul>
+            <li>writes <code>Die(6)</code>.</li>
+            <li>writes <code>ModDie(6, -2)</code>.</li>
+            <li>writes <code>WeightedDie({1: 1, 2: 2})</code>.</li>
+            <li>leaves out faces with weight 0.</li>
+            <li>writes <code>ModWeightedDie({1: 1, 2: 2}, 3)</code>.</li>
+        </ul>
+    </li>
+    <li><code>partToBuildString</code>:
+        <ul>
+            <li>leaves out a count of 1.</li>
+            <li>writes a count of 2 as <code>2*</code>.</li>
+            <li>writes a Best of pool.</li>
+            <li>writes a Worst of pool.</li>
+            <li>writes Exploding.</li>
+            <li>writes Strong.</li>
+            <li>returns <code>null</code> for a count of 0.</li>
+            <li>returns <code>null</code> when keep is more than the pool size.</li>
+            <li>ignores the pool boxes when the wrapper isn't a pool.</li>
+        </ul>
+    </li>
+    <li><code>DiceBuilder</code>:
+        <ul>
+            <li><code>toBuildString</code> joins parts with <code>&amp;</code>.</li>
+            <li><code>toBuildString</code> leaves out a modifier of 0.</li>
+            <li><code>toBuildString</code> puts a nonzero modifier last.</li>
+            <li><code>toBuildString</code> gives <code>''</code> for an empty builder.</li>
+            <li><code>toBuildString</code> gives <code>null</code> when a box is invalid.</li>
+            <li><code>addPreset</code> adds a part with count 1.</li>
+            <li><code>addPreset</code> adds 1 to a matching plain part.</li>
+            <li><code>addPreset</code> adds a new part when the match has a wrapper.</li>
+            <li><code>addCustomDie</code> adds the draft's die.</li>
+            <li><code>addCustomDie</code> does nothing for an invalid draft.</li>
+            <li><code>stepCount</code> keeps a count of 1 at 1.</li>
+            <li><code>stepModifier</code> steps below 0.</li>
+            <li><code>removePart</code> removes only that part.</li>
+        </ul>
+    </li>
+    <li><code>CustomDieDraft</code>:
+        <ul>
+            <li><code>setSides</code> adds new weights as 1.</li>
+            <li><code>setSides</code> keeps the weights still in range.</li>
+            <li><code>setSides</code> leaves the weights alone for invalid text.</li>
+            <li><code>stepModifier</code> steps below 0.</li>
+            <li><code>toDie</code> gives <code>null</code> when every weight is 0.</li>
+            <li><code>toDie</code> gives <code>null</code> for more than 100 weighted sides.</li>
+            <li><code>toDie</code> ignores the weights for a <code>Die</code>.</li>
+        </ul>
+    </li>
+</ul>
+
+<h3>New <code>tests/build-string-parser.test.js</code></h3>
+<p>Loads <code>dice-builder.js</code> and <code>build-string-parser.js</code> with <code>loadScripts</code>.</p>
+<ul>
+    <li><code>parseBuildString</code>:
+        <ul>
+            <li>gives an empty builder for blank text.</li>
+            <li>reads a count.</li>
+            <li>reads <code>1*</code> as a count of 1.</li>
+            <li>reads each die kind (four tests).</li>
+            <li>fills missing weighted faces with 0.</li>
+            <li>reads each wrapper (four tests).</li>
+            <li>reads <code>Modifier</code>.</li>
+            <li>allows extra whitespace.</li>
+            <li>gives <code>null</code> for stacked wrappers.</li>
+            <li>gives <code>null</code> for two <code>Modifier</code>s.</li>
+            <li>gives <code>null</code> for an unknown die.</li>
+            <li>gives <code>null</code> for a keep larger than the pool.</li>
+            <li>reads back what <code>toBuildString</code> writes for the example in section 2.</li>
+        </ul>
+    </li>
+</ul>
+
+<h3>New <code>tests/dice-builder-view.test.js</code></h3>
+<p>Uses <code>openPage</code>. These are page-level tests, kept out of <code>interface.test.js</code> because that
+file is already long.</p>
+<ul>
+    <li>Each dice collection row has a Build button.</li>
+    <li>Build opens the builder.</li>
+    <li>Build on a blank row opens an empty builder with no unreadable note.</li>
+    <li>Build on a row with text the builder wrote opens with those parts.</li>
+    <li>Build on a row with text the builder can't read shows the unreadable note and starts empty.</li>
+    <li>Clicking D6 twice previews <code>2*Die(6)</code>.</li>
+    <li>Choosing Best of pool shows the Pool and Keep boxes.</li>
+    <li>Choosing WeightedDie with 4 sides shows four weight boxes.</li>
+    <li>The collection modifier's + button previews <code>Modifier(1)</code>.</li>
+    <li>The custom die modifier's − button steps it below 0.</li>
+    <li>Done is disabled for an empty builder.</li>
+    <li>Done is disabled while a box is invalid, and that box is marked <code>aria-invalid</code>.</li>
+    <li>Done writes the build string into the row.</li>
+    <li>Done calculates the row (the lambda gets the build string).</li>
+    <li>Done closes the builder.</li>
+    <li>Cancel closes the builder and leaves the row's text unchanged.</li>
+    <li>Escape (a <code>cancel</code> event) closes the builder and leaves the row unchanged.</li>
+    <li>Changing the builder doesn't re-plot (<code>plotly.reactCalls</code> stays the same length).</li>
+    <li>Build is disabled while the row is calculating.</li>
+</ul>
+
+<h2 id="checks">8. Checks</h2>
+<ul>
+    <li><code>make cache-bust</code>, because <code>styles.css</code>, <code>js/models.js</code>,
+        <code>js/request-views.js</code> and <code>js/interface.js</code> change and two scripts are new. Then
+        <code>make lint</code> and <code>make test</code>, which runs typecheck first.</li>
+    <li>By hand, in a browser:
+        <ol>
+            <li>Build → D6, D6, D20 → Done. The row reads <code>2*Die(6)&amp;Die(20)</code> and calculates.</li>
+            <li>Build on the same row. It opens with both parts. Set the D20 to Best of pool, 2, 1 → Done.</li>
+            <li>Type <code>Die(6)+3</code> into a row and press Build. The unreadable note shows. Press Escape, and the
+                text is unchanged.</li>
+            <li>Custom ModWeightedDie with 3 sides, weights 1/0/2 and modifier −1 previews
+                <code>ModWeightedDie({1: 1, 3: 2}, -1)</code>.</li>
+            <li>Tab stays inside the modal, and closing it puts focus back on Build.</li>
+            <li>At phone width, the modal fits with a 16px margin, its body scrolls, and part rows wrap without
+                scrolling sideways.</li>
+            <li>Light and dark mode.</li>
+        </ol>
+    </li>
+</ul>
+
+<h2 id="questions">9. Decisions and open questions</h2>
+<h3>Decided</h3>
+<ol>
+    <li><strong>One Build button per row.</strong> It writes to its own row, so there's never a question of which row
+        gets the dice. It doesn't sit next to "+ Add dice collection".</li>
+    <li><strong>Done fills and calculates,</strong> like the Examples buttons.</li>
+    <li><strong>One wrapper per part.</strong> Stacked wrappers (<code>Exploding(StrongDie(…))</code>, a pool of
+        exploding dice) are still typed by hand. Stacking would need an ordered list in the UI and could produce very
+        slow server requests.</li>
+    <li><strong>No extras for now:</strong> no <code>ExplodingOn</code>, no explosion count (the server's default
+        applies), and no upper/lower mid pools.</li>
+    <li><strong>The row's text is parsed, not remembered.</strong> Reopening reads the box rather than a builder saved
+        on <code>DiceTableRequest</code>. Edits typed by hand after a build are picked up, Examples text the grammar
+        covers opens in the builder, and nothing extra is stored on the request.</li>
+    <li><strong>Unreadable text is replaced, not merged.</strong> The modal starts empty, and the note shows what Done
+        will overwrite. Cancel keeps it.</li>
+    <li><strong>Added dice are fixed.</strong> A part's count and wrapper can be edited, but its die can't. To change
+        the die, remove the part and add a new one. This keeps the part rows small.</li>
+    <li><strong>Preset clicks merge</strong> into a plain part of the same die, so repeated clicks build up a count.
+        They never merge into a wrapped part.</li>
+    <li><strong>Builder edits update only the modal.</strong> The rest of the page doesn't render until Done or
+        Cancel.</li>
+    <li><strong>Weighted dice have faces 1 to N</strong>, with N up to 100. A weight of 0 leaves a face out. Faces
+        below 1 need <code>ModWeightedDie</code>'s modifier, or typing.</li>
+    <li><strong>The Strong multiplier is at least 1.</strong></li>
+    <li><strong>The Examples menu is the reference for the grammar.</strong> It is the full and correct set of dice
+        and wrappers the server accepts, and section 2 is the part of it the builder writes.</li>
+</ol>
+<h3>Open</h3>
+<ol>
+    <li><strong>Preset list.</strong> <code>D4 D6 D8 D10 D12 D20 D100</code> covers standard sets. <code>D2</code> or
+        <code>D3</code> could be added if they're wanted.</li>
+</ol>
+</main>
+</body>
+</html>

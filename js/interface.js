@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', onPageLoad);
 
 function onPageLoad() {
     /** @type {AppState} */
-    const state = {diceTableRequests: [], statsRequests: []};
+    const state = {diceTableRequests: [], statsRequests: [], diceBuilderSession: null};
     window.allTheDice = {state};
 
     /** @type {Map<string, DiceTableRequestView>} */
@@ -22,6 +22,14 @@ function onPageLoad() {
 
     setUpPanels();
     setUpMenus();
+
+    const diceBuilderView = new DiceBuilderView(() => state.diceBuilderSession, {
+        done: finishDiceBuilder,
+        cancel: () => {
+            state.diceBuilderSession = null;
+            render();
+        },
+    });
 
     getElement('addDiceTableRequest').addEventListener('click', () => {
         const diceTableRequest = addDiceTableRequest();
@@ -90,6 +98,27 @@ function onPageLoad() {
         render();
     }
 
+    /** @param {DiceTableRequest} diceTableRequest */
+    function openDiceBuilder(diceTableRequest) {
+        const builder = parseBuildString(diceTableRequest.buildStringInput);
+        state.diceBuilderSession = builder === null
+            ? {diceTableRequest, builder: new DiceBuilder(), unreadableText: diceTableRequest.buildStringInput.trim()}
+            : {diceTableRequest, builder, unreadableText: ''};
+        render();
+    }
+
+    function finishDiceBuilder() {
+        const session = state.diceBuilderSession;
+        const buildString = session?.builder.toBuildString();
+        if (!session || !buildString) {
+            return;
+        }
+        session.diceTableRequest.buildStringInput = buildString;
+        state.diceBuilderSession = null;
+        render();
+        getDiceTable(session.diceTableRequest);
+    }
+
     function addStatsRequest() {
         const statsRequest = new StatsRequest();
         state.statsRequests.push(statsRequest);
@@ -147,6 +176,7 @@ function onPageLoad() {
             model => new DiceTableRequestView(model, {
                 submit: () => getDiceTable(model),
                 remove: () => removeDiceTableRequest(model),
+                build: () => openDiceBuilder(model),
             }),
             (view, model) => view.update(model),
         );
@@ -161,6 +191,7 @@ function onPageLoad() {
             }),
             (view, model) => view.update(model),
         );
+        diceBuilderView.update(state.diceBuilderSession);
 
         const statsRows = getStatsRows(loadedDiceTableRequests, rollLimits);
         renderPlot(loadedDiceTableRequests, statsRows);
