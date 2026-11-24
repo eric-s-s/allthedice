@@ -387,9 +387,13 @@ input[aria-invalid="true"] {
 /* ---------- dice builder ---------- */
 
 #diceBuilder {
+    --builder-top: max(16px, 6vh);
     width: min(40rem, calc(100vw - 32px));
     max-width: none;
-    max-height: calc(100dvh - 32px);
+    max-height: calc(100dvh - var(--builder-top) - 16px);
+    /* pinned to the top, not centered: a centered dialog moves every time it grows or shrinks, which slides
+       other buttons (like the presets) under the pointer */
+    margin: var(--builder-top) auto auto;
     padding: 0;
     color: var(--text);
     background: var(--surface);

@@ -281,8 +281,11 @@ keep values.</p>
     <li><code>.diceTableRequest</code> gets a fifth grid column. On phones the text box keeps its own line, and Build,
         Calculate and × share the second line.</li>
     <li><code>#diceBuilder</code> uses <code>--surface</code>, <code>--radius</code> and <code>--menu-shadow</code>.
-        Its width is <code>min(40rem, 100vw - 32px)</code>, its height is at most <code>100dvh - 32px</code>, and its
-        body scrolls. <code>::backdrop</code> dims the page.</li>
+        Its width is <code>min(40rem, 100vw - 32px)</code>, and its body scrolls. <code>::backdrop</code> dims the
+        page.</li>
+    <li>The dialog is pinned <code>max(16px, 6vh)</code> from the top instead of centered, and its height is at most
+        what's left minus 16px. A centered dialog moves every time it grows or shrinks (adding or removing a part,
+        showing the weights), which slid the presets and Add under the pointer and added unwanted dice.</li>
     <li>Presets wrap as a row of <code>.secondary</code> buttons. Each part row is a grid: count, die and remove
         on the first line, and the wrapper group on the second, where it wraps on phones. A long die label wraps
         inside its own column.</li>
