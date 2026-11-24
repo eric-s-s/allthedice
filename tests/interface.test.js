@@ -222,8 +222,8 @@ test('a successful response that is not JSON is an error', async () => {
 
 test('a successful response that is not a dice table is an error and plots nothing', async () => {
     const lambda = fakeLambda({});
-    const {range, ...missingRange} = die3;
-    lambda.respond = () => jsonResponse(200, missingRange);
+    const {range, ...malformedResponseMissingRange} = die3;
+    lambda.respond = () => jsonResponse(200, malformedResponseMissingRange);
     const page = await openPage({lambda});
     const row = page.getDiceTableRequestRows()[0];
     await page.submitDiceTableRequest(row, 'Die(3)');
